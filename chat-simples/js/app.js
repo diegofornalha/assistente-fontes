@@ -441,6 +441,17 @@ class ClaudeChatApp {
         const { type } = data;
 
         switch (type) {
+            case 'ping':
+                // Responde ao ping do servidor para manter conexão ativa
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify({ type: 'pong' }));
+                }
+                break;
+
+            case 'pong':
+                // Ignora resposta de pong do servidor
+                break;
+
             case 'user_message_saved':
                 this.conversationId = data.conversation_id;
                 this.localConversationId = data.conversation_id;

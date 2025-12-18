@@ -1,0 +1,38 @@
+INFO:     Started server process [536367]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 98] error while attempting to bind on address ('0.0.0.0', 8182): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+⚙️ Índice não encontrado. Construindo novo...
+✅ Índice construído com 1 documentos.
+INFO:     Started server process [544411]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8182 (Press CTRL+C to quit)
+⚙️ Índice não encontrado. Construindo novo...
+✅ Índice construído com 1 documentos.
+INFO:     127.0.0.1:41548 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49068 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56338 - "GET /index.html HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56338 - "GET /debug.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56340 - "GET /templates.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56340 - "GET /search.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56338 - "GET /notifications.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56352 - "GET /metrics.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56340 - "GET /autosave.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56352 - "GET /tool-indicator.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56338 - "GET /shortcuts.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56352 - "GET /app.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:56354 - "WebSocket /ws/chat" [accepted]
+INFO:     connection open
+✅ WebSocket conectado
+INFO:     127.0.0.1:48352 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40778 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55866 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49808 - "GET /docs HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     connection closed
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [544411]

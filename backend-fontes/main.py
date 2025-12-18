@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Any
 from pathlib import Path
 from fastapi import FastAPI, Request, Depends, WebSocket, WebSocketDisconnect
+import asyncio
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from passlib.context import CryptContext
@@ -400,10 +401,30 @@ async def websocket_chat(websocket: WebSocket):
 
     conversation_id = None
 
+    # Task de keepalive para manter conexão ativa
+    async def send_keepalive():
+        while True:
+            try:
+                await asyncio.sleep(30)  # Ping a cada 30 segundos
+                await websocket.send_json({"type": "ping"})
+            except Exception:
+                break
+
+    keepalive_task = asyncio.create_task(send_keepalive())
+
     try:
         while True:
             # Recebe mensagem do cliente
             data = await websocket.receive_json()
+
+            # Responde pong se for ping do cliente
+            if data.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
+            # Ignora pong do cliente
+            if data.get("type") == "pong":
+                continue
             print(f"📨 Mensagem recebida: {data}")
             question = data.get("message", "")
             conversation_id = data.get("conversation_id", conversation_id)
@@ -522,6 +543,8 @@ async def websocket_chat(websocket: WebSocket):
         except:
             pass
         await websocket.close()
+    finally:
+        keepalive_task.cancel()  # Cancela task de keepalive
 
 # ====== ENDPOINTS REST PARA HISTÓRICO (OPCIONAL) ======
 
