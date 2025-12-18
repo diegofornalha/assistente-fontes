@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Session Viewer</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        document.documentElement.dataset.theme = 'light';
+    </script>
+</head>
+<body>
+    <div class="container">
+        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
+
+        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
+            <div class="debug-visual-header">
+                <h3 id="session-title">Session Info</h3>
+                <a id="back-to-projects" class="debug-header-link" href="index_projects.html" title="Voltar para lista">⟲ Projetos</a>
+            </div>
+            <div class="debug-visual-content">
+                <div class="debug-log" id="session-info"></div>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div id="selection-toolbar" class="selection-toolbar" style="display: none;">
+                <div class="selection-actions">
+                    <button id="select-all-btn" class="selection-btn">Selecionar tudo</button>
+                    <button id="clear-selection-btn" class="selection-btn secondary">Limpar seleção</button>
+                    <button id="delete-selected-btn" class="selection-btn danger">Excluir selecionadas</button>
+                </div>
+            </div>
+            <div id="messages" class="messages"></div>
+            <div id="typing-indicator" class="typing-indicator" style="display: none;">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="typing-info">
+                    <span class="typing-text">Claude está processando...</span>
+                    <span id="response-timer" class="response-timer">0.0s</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <textarea id="message-input" placeholder="Digite sua mensagem..." rows="1"></textarea>
+            <button id="send-button" class="send-button">
+                <span class="button-text">Enviar</span>
+                <span class="button-icon">➤</span>
+            </button>
+            <button id="refresh-button" class="send-button" style="margin-left: 0.5rem;" title="Atualizar página">
+                <span class="button-icon">🔄</span>
+            </button>
+            <button id="delete-session-btn" class="send-button" style="margin-left: 0.5rem; background: #ef4444;" title="Deletar esta sessão">
+                <span class="button-icon">🗑️</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="../js/debug-visual.js"></script>
+    <script>
+        if (window.marked) {
+            marked.setOptions({
+                gfm: true,
+                breaks: true,
+                highlight(code, lang) {
+                    if (window.hljs) {
+                        if (lang && hljs.getLanguage(lang)) {
+                            return hljs.highlight(code, { language: lang }).value;
+                        }
+                        return hljs.highlightAuto(code).value;
+                    }
+                    return code;
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
+        }
+
+        function basicMarkdownToHtml(markdownText = '') {
+            const md = String(markdownText || '').replace(/\r\n/g, '\n');
+            const lines = md.split('\n');
+
+            let html = '';
+            let inCode = false;
+            let codeLang = '';
+            let codeLines = [];
+            let inUl = false;
+            let inOl = false;
+            let paragraphLines = [];
+
+            function inlineFormat(text = '') {
+                let s = escapeHtml(text);
+                s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+                s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+                s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+                s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+                return s;
+            }
+
+            function closeLists() {
+                if (inUl) {
+                    html += '</ul>';
+                    inUl = false;
+                }
+                if (inOl) {
+                    html += '</ol>';
+                    inOl = false;
+                }
+            }
+
+            function flushParagraph() {
+                if (!paragraphLines.length) return;
+                const text = paragraphLines.join(' ').trim();
+                paragraphLines = [];
+                if (!text) return;
+                html += `<p>${inlineFormat(text)}</p>`;
+            }
+
+            function flushCode() {
+                const code = codeLines.join('\n');
+                codeLines = [];
+                const langClass = codeLang ? ` class="language-${escapeHtml(codeLang)}"` : '';
+                html += `<pre><code${langClass}>${escapeHtml(code)}</code></pre>`;
+                codeLang = '';
+            }
+
+            for (const rawLine of lines) {
+                const line = rawLine ?? '';
+
+                const fence = line.match(/^```(\w+)?\s*$/);
+                if (fence) {
+                    if (inCode) {
+                        inCode = false;
+                        flushCode();
+                    } else {
+                        flushParagraph();
+                        closeLists();
+                        inCode = true;
+                        codeLang = fence[1] || '';
+                    }
+                    continue;
+                }
+
+                if (inCode) {
+                    codeLines.push(line);
+                    continue;
+                }
+
+                if (!line.trim()) {
+                    flushParagraph();
+                    closeLists();
+                    continue;
+                }
+
+                const heading = line.match(/^(#{1,6})\s+(.*)$/);
+                if (heading) {
+                    flushParagraph();
+                    closeLists();
+                    const level = Math.min(6, heading[1].length);
+                    html += `<h${level}>${inlineFormat(heading[2] || '')}</h${level}>`;
+                    continue;
+                }
+
+                const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+                if (ol) {
+                    flushParagraph();
+                    if (!inOl) {
+                        closeLists();
+                        html += '<ol>';
+                        inOl = true;
+                    }
+                    html += `<li>${inlineFormat(ol[1] || '')}</li>`;
+                    continue;
+                }
+
+                const ul = line.match(/^\s*[-*]\s+(.*)$/);
+                if (ul) {
+                    flushParagraph();
+                    if (!inUl) {
+                        closeLists();
+                        html += '<ul>';
+                        inUl = true;
+                    }
+                    html += `<li>${inlineFormat(ul[1] || '')}</li>`;
+                    continue;
+                }
+
+                if (/^\s*---+\s*$/.test(line)) {
+                    flushParagraph();
+                    closeLists();
+                    html += '<hr>';
+                    continue;
+                }
+
+                paragraphLines.push(line.trim());
+            }
+
+            if (inCode) {
+                inCode = false;
+                flushCode();
+            }
+            flushParagraph();
+            closeLists();
+            return html;
+        }
+
+        function renderMarkdown(text) {
+            if (!text) return '';
+            if (window.marked) {
+                return marked.parse(text);
+            }
+            return basicMarkdownToHtml(text);
+        }
+
+        function sanitizeHtml(html) {
+            if (!html) return '';
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+
+            doc.querySelectorAll('script, iframe, object, embed, link, style').forEach(el => el.remove());
+
+            doc.body.querySelectorAll('*').forEach(el => {
+                Array.from(el.attributes).forEach(attr => {
+                    const name = attr.name.toLowerCase();
+                    const value = (attr.value || '').trim().toLowerCase();
+                    if (name.startsWith('on') || value.startsWith('javascript:')) {
+                        el.removeAttribute(attr.name);
+                    }
+                });
+            });
+
+            return doc.body.innerHTML;
+        }
+
+        function renderMarkdownSafe(text) {
+            const raw = renderMarkdown(text);
+            return sanitizeHtml(raw);
+        }
+
+        function enhanceCodeBlocks(root) {
+            if (!root) return;
+
+            root.querySelectorAll('pre code').forEach(codeEl => {
+                if (window.hljs) {
+                    hljs.highlightElement(codeEl);
+                }
+
+                const text = codeEl.textContent || '';
+                const lines = text.split('\n').filter(Boolean).length;
+                const shouldCollapse = lines > 12 || text.length > 800;
+
+                if (shouldCollapse) {
+                    const pre = codeEl.parentElement;
+                    if (!pre) return;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'code-block';
+
+                    const toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'code-toggle';
+                    toggle.textContent = 'Ver código completo';
+
+                    pre.classList.add('collapsible');
+                    pre.parentNode.insertBefore(wrapper, pre);
+                    wrapper.appendChild(pre);
+                    wrapper.appendChild(toggle);
+
+                    toggle.addEventListener('click', () => {
+                        const expanded = pre.classList.toggle('expanded');
+                        toggle.textContent = expanded ? 'Ocultar código' : 'Ver código completo';
+                    });
+                }
+            });
+        }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const SESSION_ID = urlParams.get('session_id');
+        let toolbarInitialized = false;
+        let currentEntries = [];
+        let messagesContainer = null;
+        let deletingMessage = false;
+        const selectedEntries = new Set();
+
+        let responseStartTime = null;
+        let responseTimerInterval = null;
+
+        const selectionToolbar = document.getElementById('selection-toolbar');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const clearSelectionBtn = document.getElementById('clear-selection-btn');
+        const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+
+        if (selectAllBtn) {
+            selectAllBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                selectAllEntries();
+            });
+        }
+
+        if (clearSelectionBtn) {
+            clearSelectionBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                selectedEntries.clear();
+                updateSelectionToolbar();
+                renderSessionEntries(messagesContainer, currentEntries);
+            });
+        }
+
+        if (deleteSelectedBtn) {
+            deleteSelectedBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                deleteSelectedEntries();
+            });
+        }
+
+        const refreshButton = document.getElementById('refresh-button');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', () => {
+                window.location.reload();
+            });
+        }
+
+        const deleteSessionBtn = document.getElementById('delete-session-btn');
+        if (deleteSessionBtn) {
+            deleteSessionBtn.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (!SESSION_ID) return;
+
+                try {
+                    deleteSessionBtn.disabled = true;
+                    const url = `${window.location.origin}/sessions/` + encodeURIComponent(SESSION_ID);
+                    const res = await fetch(url, { method: 'DELETE' });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || data?.success !== true) {
+                        throw new Error(data?.error || 'Falha ao deletar sessão.');
+                    }
+                    window.location.href = 'index_projects.html';
+                } catch (err) {
+                    const msg = err?.message || 'Erro ao deletar sessão.';
+                    window.debugVisual?.log('error', msg);
+                    alert(msg);
+                } finally {
+                    deleteSessionBtn.disabled = false;
+                }
+            });
+        }
+
+        if (!SESSION_ID) {
+            document.body.innerHTML = '<p style="padding:3rem;text-align:center">❌ Session ID missing. Use: ?session_id=...</p>';
+        } else {
+            loadSession(SESSION_ID);
+        }
+
+        async function loadSession(sessionId) {
+            const container = document.getElementById('messages');
+            const infoLog = document.getElementById('session-info');
+            const title = document.getElementById('session-title');
+
+            messagesContainer = container;
+
+            try {
+                const res = await fetch(`${window.location.origin}/sessions/` + sessionId);
+                const data = await res.json();
+
+                if (data.error) {
+                    container.innerHTML = '<p style="text-align:center;padding:3rem;color:#ef4444">❌ ' + data.error + '</p>';
+                    return;
+                }
+
+                const model = data.messages.find(m => m.message?.model)?.message?.model || 'unknown';
+                title.textContent = 'Session - ' + sessionId.substring(0, 8) + '...';
+                const backBtn = document.getElementById('back-to-projects');
+                if (backBtn) {
+                    backBtn.onclick = () => window.location.href = 'index_projects.html';
+                    backBtn.innerHTML = '⟲ Projetos';
+                }
+
+                infoLog.innerHTML = '<div class="debug-entry debug-entry-info"><span class="debug-time">ID</span><span class="debug-icon">📝</span><span class="debug-msg">' + sessionId + '</span></div><div class="debug-entry debug-entry-info"><span class="debug-time">Model</span><span class="debug-icon">🤖</span><span class="debug-msg">' + model + '</span></div><div class="debug-entry debug-entry-success"><span class="debug-time">Count</span><span class="debug-icon">💬</span><span class="debug-msg">' + data.count + ' mensagens</span></div>';
+
+                selectedEntries.clear();
+                currentEntries = Array.isArray(data.messages)
+                    ? data.messages.map((entry, index) => normalizeEntry(entry, index))
+                    : [];
+
+                initializeToolbar(container);
+                renderSessionEntries(container, currentEntries);
+
+                container.scrollTop = container.scrollHeight;
+                initWS(sessionId);
+            } catch (err) {
+                selectedEntries.clear();
+                currentEntries = [];
+                updateSelectionToolbar();
+                container.innerHTML = '<p style="text-align:center;padding:3rem;color:#ef4444">❌ Erro: ' + err.message + '</p>';
+            }
+        }
+
+        function initializeToolbar(container) {
+            if (toolbarInitialized) return;
+
+            const summaryToggle = document.getElementById('toggle-summary');
+            const systemToggle = document.getElementById('toggle-system');
+
+            if (summaryToggle) {
+                container.classList.toggle('hide-summaries', !summaryToggle.checked);
+                summaryToggle.addEventListener('change', () => {
+                    container.classList.toggle('hide-summaries', !summaryToggle.checked);
+                });
+            }
+
+            if (systemToggle) {
+                container.classList.toggle('hide-system', !systemToggle.checked);
+                systemToggle.addEventListener('change', () => {
+                    container.classList.toggle('hide-system', !systemToggle.checked);
+                });
+            }
+
+            toolbarInitialized = true;
+        }
+
+        function renderSessionEntries(container, entries) {
+            const target = container || messagesContainer;
+            if (!target) return;
+
+            const previousScroll = target.scrollTop;
+            const isAtBottom = Math.abs(target.scrollHeight - (target.scrollTop + target.clientHeight)) < 4;
+
+            target.innerHTML = '';
+
+            if (!Array.isArray(entries) || !entries.length) {
+                updateSelectionToolbar();
+                return;
+            }
+
+            entries.forEach((entry, index) => {
+                const normalizedEntry = normalizeEntry(entry, index);
+                const card = buildSessionEntry(normalizedEntry, index);
+                if (!card) return;
+
+                const key = getEntryKey(normalizedEntry, index);
+                if (key && selectedEntries.has(key)) {
+                    card.classList.add('selected-entry');
+                }
+
+                card.dataset.entryIndex = index;
+                card.dataset.entryKey = key || '';
+                target.appendChild(card);
+            });
+
+            if (isAtBottom) {
+                target.scrollTop = target.scrollHeight;
+            } else {
+                target.scrollTop = Math.min(previousScroll, target.scrollHeight);
+            }
+
+            updateSelectionToolbar();
+        }
+
+        function normalizeEntry(entry, index) {
+            if (entry && typeof entry === 'object') {
+                entry.__lineIndex = index;
+            }
+            return entry;
+        }
+
+        function reindexCurrentEntries() {
+            if (!Array.isArray(currentEntries)) return;
+            currentEntries.forEach((entry, idx) => {
+                if (entry && typeof entry === 'object') {
+                    entry.__lineIndex = idx;
+                }
+            });
+        }
+
+        function updateSelectionToolbar() {
+            if (!selectionToolbar) return;
+
+            // Para sessões do Claude Code, não exibimos seleção/exclusão de entradas.
+            if (String(SESSION_ID || '').startsWith('claude:')) {
+                selectionToolbar.style.display = 'none';
+                if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+                if (deleteSelectedBtn) deleteSelectedBtn.disabled = true;
+                if (selectAllBtn) selectAllBtn.disabled = true;
+                return;
+            }
+
+            const total = Array.isArray(currentEntries) ? currentEntries.length : 0;
+            const selectedCount = selectedEntries.size;
+
+            if (!total) {
+                selectionToolbar.style.display = 'none';
+                if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+                if (deleteSelectedBtn) deleteSelectedBtn.disabled = true;
+                if (selectAllBtn) selectAllBtn.disabled = true;
+                return;
+            }
+
+            selectionToolbar.style.display = 'flex';
+
+            if (clearSelectionBtn) {
+                clearSelectionBtn.disabled = selectedCount === 0 || deletingMessage;
+            }
+
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.disabled = selectedCount === 0 || deletingMessage;
+            }
+
+            if (selectAllBtn) {
+                selectAllBtn.disabled = deletingMessage;
+            }
+        }
+
+        function getEntryKey(entry, index) {
+            if (!entry || typeof entry !== 'object') {
+                return 'line:' + (index ?? 0);
+            }
+
+            const candidates = [
+                entry.messageId,
+                entry.id,
+                entry.uuid,
+                entry.tool_use_id,
+                entry.toolUseId
+            ];
+
+            const inner = entry.message;
+            if (inner && typeof inner === 'object') {
+                candidates.push(inner.id, inner.messageId);
+            }
+
+            for (const value of candidates) {
+                if (typeof value === 'string' && value.trim()) {
+                    return 'id:' + value.trim();
+                }
+            }
+
+            const lineIndex = entry.__lineIndex ?? index;
+            return 'line:' + (typeof lineIndex === 'number' ? lineIndex : 0);
+        }
+
+        function toggleEntrySelection(entry, index, shouldSelect) {
+            const key = getEntryKey(entry, index);
+            if (!key) return;
+
+            if (shouldSelect) {
+                selectedEntries.add(key);
+            } else {
+                selectedEntries.delete(key);
+            }
+
+            updateSelectionToolbar();
+        }
+
+        function selectAllEntries() {
+            if (!Array.isArray(currentEntries) || !currentEntries.length) return;
+
+            currentEntries.forEach((entry, index) => {
+                const key = getEntryKey(entry, index);
+                if (key) {
+                    selectedEntries.add(key);
+                }
+            });
+
+            updateSelectionToolbar();
+            renderSessionEntries(messagesContainer, currentEntries);
+        }
+
+        function buildDeletePayload(entry, index) {
+            const payload = {};
+            const messageId = extractEntryMessageId(entry);
+            if (messageId) {
+                payload.message_id = messageId;
+            }
+
+            const lineIndex = entry && typeof entry === 'object' && typeof entry.__lineIndex === 'number'
+                ? entry.__lineIndex
+                : index;
+
+            if (typeof lineIndex === 'number' && lineIndex >= 0) {
+                payload.line_index = lineIndex;
+            }
+
+            return payload;
+        }
+
+        async function performDeleteRequest(payload) {
+            const res = await fetch(`${window.location.origin}/sessions/` + SESSION_ID + '/messages', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.error) {
+                throw new Error(data?.error || 'Falha ao remover mensagem.');
+            }
+
+            return data;
+        }
+
+        function cleanupAfterDeletion(entry, index) {
+            const key = getEntryKey(entry, index);
+            if (key) {
+                selectedEntries.delete(key);
+            }
+
+            let removeIndex = typeof index === 'number' ? index : -1;
+            if (removeIndex < 0 || removeIndex >= currentEntries.length || currentEntries[removeIndex] !== entry) {
+                removeIndex = currentEntries.indexOf(entry);
+            }
+
+            if (removeIndex === -1 && key) {
+                removeIndex = currentEntries.findIndex(item => getEntryKey(item) === key);
+            }
+
+            if (removeIndex !== -1) {
+                currentEntries.splice(removeIndex, 1);
+            }
+
+            reindexCurrentEntries();
+            renderSessionEntries(messagesContainer, currentEntries);
+        }
+
+        async function deleteEntry(entry, index, options = {}) {
+            if (!SESSION_ID) return false;
+
+            const { skipGuard = false, silent = false } = options;
+
+            if (deletingMessage && !skipGuard) {
+                return false;
+            }
+
+            const payload = buildDeletePayload(entry, index);
+
+            if (typeof payload.line_index !== 'number' && !payload.message_id) {
+                if (!silent) {
+                    console.error('Não foi possível identificar a entrada selecionada.');
+                }
+                return false;
+            }
+
+            if (!skipGuard) {
+                deletingMessage = true;
+                updateSelectionToolbar();
+            }
+
+            try {
+                await performDeleteRequest(payload);
+                cleanupAfterDeletion(entry, index);
+                window.debugVisual?.log('delete', 'Entrada removida: ' + (payload.message_id || ('linha ' + payload.line_index)));
+                return true;
+            } catch (err) {
+                const errorText = err?.message || 'Erro ao remover mensagem.';
+                console.error('Erro ao remover mensagem:', errorText, err);
+                window.debugVisual?.log('error', errorText, { payload, silent });
+                return false;
+            } finally {
+                if (!skipGuard) {
+                    deletingMessage = false;
+                    updateSelectionToolbar();
+                }
+            }
+        }
+
+        async function deleteSelectedEntries() {
+            if (!SESSION_ID) return;
+            if (selectedEntries.size === 0) return;
+            if (deletingMessage) return;
+
+            const total = selectedEntries.size;
+            window.debugVisual?.log('info', `Remoção em lote solicitada (${total} entradas).`);
+
+            deletingMessage = true;
+            updateSelectionToolbar();
+
+            if (selectionToolbar) {
+                selectionToolbar.classList.add('loading');
+            }
+
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.disabled = true;
+                deleteSelectedBtn.textContent = 'Removendo...';
+            }
+
+            let failures = 0;
+
+            const targets = currentEntries
+                .map((entry, index) => ({ entry, index, key: getEntryKey(entry, index) }))
+                .filter(item => selectedEntries.has(item.key));
+
+            for (const item of targets) {
+                const success = await deleteEntry(item.entry, item.index, { skipGuard: true, silent: true });
+                if (!success) {
+                    failures += 1;
+                }
+            }
+
+            selectedEntries.clear();
+            deletingMessage = false;
+
+            if (selectionToolbar) {
+                selectionToolbar.classList.remove('loading');
+            }
+
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.disabled = false;
+                deleteSelectedBtn.textContent = 'Excluir selecionadas';
+            }
+
+            if (failures > 0) {
+                window.debugVisual?.log('warning', `Falha ao remover ${failures} de ${targets.length} entradas.`);
+            } else {
+                window.debugVisual?.log('success', `Remoção em lote concluída (${targets.length} entradas).`);
+            }
+
+            updateSelectionToolbar();
+            renderSessionEntries(messagesContainer, currentEntries);
+        }
+
+        function buildSessionEntry(entry, index) {
+            if (!entry) return null;
+
+            if (entry.type === 'summary' || entry.summary) {
+                return createSummaryCard(entry, index);
+            }
+
+            const message = entry.message || entry;
+            const role = message?.role || entry.role;
+
+            if (role === 'user' || role === 'assistant') {
+                const text = extractMessageText(message);
+                if (!text) return null;
+                const timestamp = entry.timestamp || message.timestamp || message.createdAt;
+                return createMessageCard(role, text, timestamp, entry, index);
+            }
+
+            return createSystemCard(entry, index);
+        }
+
+        function extractMessageText(message) {
+            if (!message) return '';
+
+            const content = message.content ?? message.text ?? '';
+
+            if (typeof content === 'string') {
+                return content.trim();
+            }
+
+            if (Array.isArray(content)) {
+                return content
+                    .filter(block => block && (block.type === 'text' || block.type === 'tool_result'))
+                    .map(block => {
+                        const content = block.text || block.content || '';
+                        return typeof content === 'string' ? content.trim() : '';
+                    })
+                    .filter(Boolean)
+                    .join('\n');
+            }
+
+            if (typeof content === 'object' && content !== null) {
+                const text = content.text || content.content || '';
+                return typeof text === 'string' ? text.trim() : '';
+            }
+
+            return '';
+        }
+
+        function createMessageCard(role, text, timestamp, entry, index) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message ' + (role === 'user' ? 'user' : 'assistant');
+
+            const header = document.createElement('div');
+            header.className = 'message-header';
+
+            const name = document.createElement('strong');
+            name.textContent = role === 'user' ? '👤 Você' : '🤖 Nanda';
+
+            const meta = document.createElement('div');
+            meta.className = 'message-meta';
+
+            const time = document.createElement('span');
+            time.className = 'timestamp';
+            time.textContent = formatTimestamp(timestamp, false);
+
+            meta.appendChild(time);
+            header.append(name, meta);
+
+            const actions = createEntryActions(index, entry);
+            if (actions) header.appendChild(actions);
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+
+            const body = document.createElement('div');
+            body.className = 'message-body';
+
+            body.innerHTML = renderMarkdownSafe(text);
+            enhanceCodeBlocks(body);
+
+            content.appendChild(body);
+            wrapper.append(header, content);
+
+            return wrapper;
+        }
+
+        function createSummaryCard(entry, index) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'session-entry summary';
+
+            const header = document.createElement('div');
+            header.className = 'session-entry-header';
+
+            const title = document.createElement('div');
+            title.className = 'session-entry-title';
+            title.textContent = '📊 Resumo automático';
+
+            const meta = document.createElement('span');
+            meta.className = 'session-entry-meta';
+            meta.textContent = formatTimestamp(entry.timestamp, true);
+
+            header.append(title, meta);
+
+            const actions = createEntryActions(index, entry);
+            if (actions) header.appendChild(actions);
+
+            const body = document.createElement('div');
+            body.className = 'session-entry-body';
+            body.innerHTML = renderMarkdown(entry.summary || '');
+            enhanceCodeBlocks(body);
+
+            wrapper.append(header, body);
+            return wrapper;
+        }
+
+        function createSystemCard(entry, index) {
+            const wrapper = document.createElement('div');
+            const isError = detectError(entry);
+            wrapper.className = 'session-entry system' + (isError ? ' error' : '');
+
+            const header = document.createElement('div');
+            header.className = 'session-entry-header';
+
+            const title = document.createElement('div');
+            title.className = 'session-entry-title';
+            title.textContent = (isError ? '⚠️' : '🛠️') + ' ' + (deriveSystemTitle(entry) || 'Evento do sistema');
+
+            const meta = document.createElement('span');
+            meta.className = 'session-entry-meta';
+            meta.textContent = formatTimestamp(entry.timestamp || entry.message?.timestamp, true);
+
+            header.append(title, meta);
+
+            const actions = createEntryActions(index, entry);
+            if (actions) header.appendChild(actions);
+
+            const body = document.createElement('div');
+            body.className = 'session-entry-body';
+
+            const pre = document.createElement('pre');
+            pre.textContent = truncate(JSON.stringify(entry, null, 2));
+
+            body.appendChild(pre);
+            wrapper.append(header, body);
+
+            return wrapper;
+        }
+
+        function createEntryActions(index, entry) {
+            if (index == null || index < 0) return null;
+
+            // Para sessões do Claude Code (JSONL), não suportamos excluir entradas individuais aqui.
+            if (String(SESSION_ID || '').startsWith('claude:')) {
+                return null;
+            }
+
+            const container = document.createElement('div');
+            container.className = 'entry-actions';
+
+            const selectWrapper = document.createElement('label');
+            selectWrapper.className = 'entry-select';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'entry-checkbox';
+
+            const key = getEntryKey(entry, index);
+            if (key && selectedEntries.has(key)) {
+                checkbox.checked = true;
+            }
+
+            checkbox.addEventListener('change', (event) => {
+                event.stopPropagation();
+                const shouldSelect = checkbox.checked;
+                toggleEntrySelection(entry, index, shouldSelect);
+                const card = event.currentTarget.closest('.message, .session-entry');
+                if (card) {
+                    card.classList.toggle('selected-entry', shouldSelect);
+                }
+            });
+
+            selectWrapper.appendChild(checkbox);
+            container.appendChild(selectWrapper);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'entry-action-btn delete';
+            deleteBtn.textContent = 'Excluir';
+            deleteBtn.disabled = deletingMessage;
+
+            deleteBtn.addEventListener('click', async (event) => {
+                event.stopPropagation();
+                const preview = getEntryPreview(entry);
+                window.debugVisual?.log('info', 'Solicitada remoção individual', { preview });
+
+                const originalLabel = deleteBtn.textContent;
+                deleteBtn.disabled = true;
+                deleteBtn.textContent = 'Removendo...';
+
+                const success = await deleteEntry(entry, index);
+
+                if (!success) {
+                    deleteBtn.disabled = false;
+                    deleteBtn.textContent = originalLabel;
+                } else {
+                    window.debugVisual?.log('success', 'Entrada removida com sucesso');
+                }
+            });
+
+            container.appendChild(deleteBtn);
+            return container;
+        }
+
+        function getEntryPreview(entry) {
+            try {
+                if (!entry) return 'Entrada sem detalhes.';
+
+                if (entry.summary) {
+                    return 'Resumo: ' + String(entry.summary).slice(0, 120);
+                }
+
+                if (entry.message) {
+                    const text = extractMessageText(entry.message);
+                    if (text) return text.slice(0, 120);
+                }
+
+                if (entry.content) {
+                    const text = Array.isArray(entry.content) ? entry.content.join(' ') : String(entry.content);
+                    if (text) return text.slice(0, 120);
+                }
+
+                return JSON.stringify(entry).slice(0, 120);
+            } catch (err) {
+                return 'Entrada selecionada.';
+            }
+        }
+
+        function extractEntryMessageId(entry) {
+            if (!entry) return null;
+
+            const candidates = [entry.messageId, entry.id, entry.uuid];
+
+            if (entry.message && typeof entry.message === 'object') {
+                candidates.push(entry.message.id, entry.message.messageId);
+            }
+
+            for (const value of candidates) {
+                if (typeof value === 'string' && value.trim()) {
+                    return value;
+                }
+            }
+            return null;
+        }
+
+        function deriveSystemTitle(entry) {
+            if (entry.type && entry.type !== 'message') return entry.type;
+            if (entry.message?.type && entry.message.type !== 'message') return entry.message.type;
+            if (entry.tool_use_id || entry.toolUseId) return 'tool_result';
+            if (entry.message?.content && Array.isArray(entry.message.content)) {
+                const block = entry.message.content.find(item => item?.type && item.type !== 'text');
+                if (block?.type) return block.type;
+            }
+            return entry.role || 'evento';
+        }
+
+        function detectError(entry) {
+            if (entry.type === 'error' || entry.level === 'error') return true;
+            if (entry.toolUseResult?.is_error) return true;
+            const serialized = JSON.stringify(entry).toLowerCase();
+            return serialized.includes('error') || serialized.includes('denied');
+        }
+
+        function truncate(text, max = 800) {
+            if (!text) return '';
+            return text.length > max ? text.slice(0, max) + '…' : text;
+        }
+
+        function formatTimestamp(value, includeDate) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return includeDate ? value : value;
+
+            if (includeDate) {
+                return date.toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            return date.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function showTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.style.display = 'flex';
+            }
+            startResponseTimer();
+        }
+
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typing-indicator');
+            if (typingIndicator) {
+                typingIndicator.style.display = 'none';
+            }
+            stopResponseTimer();
+        }
+
+        function startResponseTimer() {
+            responseStartTime = Date.now();
+
+            if (responseTimerInterval) {
+                clearInterval(responseTimerInterval);
+            }
+
+            const timerElement = document.getElementById('response-timer');
+            responseTimerInterval = setInterval(() => {
+                const elapsed = (Date.now() - responseStartTime) / 1000;
+                if (timerElement) {
+                    timerElement.textContent = `${elapsed.toFixed(1)}s`;
+
+                    if (elapsed > 10) {
+                        timerElement.style.color = '#ef4444';
+                    } else if (elapsed > 5) {
+                        timerElement.style.color = '#f59e0b';
+                    } else {
+                        timerElement.style.color = '#10b981';
+                    }
+                }
+            }, 100);
+        }
+
+        function stopResponseTimer() {
+            if (responseTimerInterval) {
+                clearInterval(responseTimerInterval);
+                responseTimerInterval = null;
+            }
+
+            if (responseStartTime) {
+                const finalTime = Date.now() - responseStartTime;
+                window.debugVisual?.log('info', `Tempo de resposta: ${finalTime}ms`);
+            }
+
+            responseStartTime = null;
+            const timerElement = document.getElementById('response-timer');
+            if (timerElement) {
+                timerElement.style.color = '';
+            }
+        }
+
+        function initWS(sid) {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/chat`);
+            const input = document.getElementById('message-input');
+            const btn = document.getElementById('send-button');
+            const msgs = document.getElementById('messages');
+
+            let streamingState = null;
+            let chunkCount = 0;
+
+            ws.onopen = () => window.debugVisual?.log('websocket', 'Conectado');
+            ws.onmessage = (e) => {
+                const d = JSON.parse(e.data);
+
+                if (d.type === 'text_chunk') {
+                    if (!streamingState) {
+                        hideTypingIndicator();
+                        streamingState = createStreamingAssistantMessage(msgs);
+                    }
+
+                    chunkCount += 1;
+
+                    streamingState.paragraph.textContent += d.content;
+                    streamingState.counter.textContent = 'Chunks: ' + chunkCount;
+                    streamingState.timestamp.textContent = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+
+                    msgs.scrollTop = msgs.scrollHeight;
+                } else if (d.type === 'result') {
+                    hideTypingIndicator();
+                    btn.disabled = false;
+
+                    if (!streamingState) {
+                        streamingState = createStreamingAssistantMessage(msgs);
+                    }
+
+                    if (d.content) {
+                        streamingState.paragraph.textContent = d.content;
+                    }
+
+                    if (streamingState.counter) {
+                        const label = chunkCount > 0 ? 'Chunks: ' + chunkCount + ' ✓' : 'Resposta completa';
+                        streamingState.counter.textContent = label;
+                    }
+
+                    streamingState.timestamp.textContent = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+
+                    if (typeof d.duration_ms !== 'undefined' || typeof d.cost !== 'undefined') {
+                        window.debugVisual?.log('result', JSON.stringify({ duration: d.duration_ms, cost: d.cost }));
+                    }
+
+                    streamingState = null;
+                    chunkCount = 0;
+                } else if (d.type === 'error') {
+                    hideTypingIndicator();
+                    btn.disabled = false;
+                    window.debugVisual?.log('error', d.error || 'Erro no processamento');
+
+                    if (!streamingState) {
+                        streamingState = createStreamingAssistantMessage(msgs);
+                    }
+
+                    if (streamingState.counter) {
+                        streamingState.counter.textContent = 'Erro durante streaming';
+                        streamingState.counter.classList.add('error');
+                    }
+
+                    streamingState.paragraph.textContent += '\n[Erro] ' + (d.error || 'Falha desconhecida');
+                    streamingState.timestamp.textContent = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+                }
+            };
+
+            ws.onclose = () => {
+                btn.disabled = false;
+                window.debugVisual?.log('websocket', 'Conexão encerrada');
+            };
+
+            ws.onerror = () => {
+                btn.disabled = false;
+                window.debugVisual?.log('websocket', 'Erro na conexão WebSocket');
+            };
+
+            btn.onclick = () => {
+                const msg = input.value.trim();
+                if (!msg) return;
+
+                const userMessage = createMessageCard('user', msg, new Date().toISOString());
+                msgs.appendChild(userMessage);
+                msgs.scrollTop = msgs.scrollHeight;
+
+                // Mantém o mesmo conversation_id para continuar a sessão
+                ws.send(JSON.stringify({ message: msg, conversation_id: sid }));
+
+                input.value = '';
+                btn.disabled = true;
+                chunkCount = 0;
+                streamingState = null;
+
+                showTypingIndicator();
+            };
+        }
+
+        function createStreamingAssistantMessage(container) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'message assistant';
+
+            const header = document.createElement('div');
+            header.className = 'message-header';
+
+            const name = document.createElement('strong');
+            name.textContent = '🤖 Nanda';
+
+            const meta = document.createElement('div');
+            meta.className = 'message-meta';
+
+            const counter = document.createElement('span');
+            counter.className = 'chunk-counter';
+            counter.textContent = 'Chunks: 0';
+
+            const timestamp = document.createElement('span');
+            timestamp.className = 'timestamp';
+            timestamp.textContent = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+
+            meta.append(counter, timestamp);
+            header.append(name, meta);
+
+            const content = document.createElement('div');
+            content.className = 'message-content';
+
+            const paragraph = document.createElement('p');
+            paragraph.style.whiteSpace = 'pre-wrap';
+
+            content.appendChild(paragraph);
+            wrapper.append(header, content);
+
+            container.appendChild(wrapper);
+            container.scrollTop = container.scrollHeight;
+
+            return { wrapper, paragraph, counter, timestamp };
+        }
+    </script>
+</body>
+</html>

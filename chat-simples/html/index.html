@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Chat - Streaming Real</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>
+        (function() {
+            try {
+                const stored = localStorage.getItem('claude_chat_theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = stored || (prefersDark ? 'dark' : 'light');
+                document.documentElement.dataset.theme = theme;
+            } catch (err) {
+                console.warn('Theme init error', err);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="container">
+        <!-- Debug Visual Toggle (topo) -->
+        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
+
+        <!-- Debug Visual Panel (topo, recolhível) -->
+        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
+            <div class="debug-visual-header">
+                <h3>Debug Visual - Logs em Tempo Real</h3>
+                <a class="debug-header-link" href="index_projects.html" title="Ir para projetos">⟲ Projetos</a>
+            </div>
+            <div class="debug-visual-content" id="debug-visual-content">
+                <div class="debug-log"></div>
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="chat-container">
+            <div class="chat-toolbar">
+                <div class="toolbar-left">
+                    <a id="history-link" class="toolbar-link" href="index_projects.html" title="Ver histórico de sessões">📁 Histórico</a>
+                    <button id="new-chat-btn" class="toolbar-link" style="border: none; background: none; cursor: pointer; color: inherit; font: inherit;" title="Iniciar novo chat">✨ Novo Chat</button>
+                </div>
+                <div class="toolbar-right">
+                    <span id="status" class="status-pill">🟡</span>
+                    <button id="theme-toggle" class="toolbar-link" type="button" title="Alternar tema (claro/escuro)" style="border: none; cursor: pointer; color: inherit; font: inherit;">
+                        🌓 Tema
+                    </button>
+                </div>
+            </div>
+            <div id="messages" class="messages">
+            </div>
+
+            <!-- Typing indicator com contador -->
+            <div id="typing-indicator" class="typing-indicator" style="display: none;">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="typing-info">
+                    <span class="typing-text">Claude está processando...</span>
+                    <span id="response-timer" class="response-timer">0.0s</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <textarea
+                id="message-input"
+                placeholder="Digite sua mensagem..."
+                rows="1"
+            ></textarea>
+            <button id="send-button" class="send-button">
+                <span class="button-text">Enviar</span>
+                <span class="button-icon">➤</span>
+            </button>
+            <button id="refresh-button" class="send-button" style="margin-left: 0.5rem;" title="Atualizar página">
+                <span class="button-icon">🔄</span>
+            </button>
+        </div>
+
+    </div>
+
+    <script src="../js/debug.js"></script>
+    <script src="../js/debug-visual.js"></script>
+    <script src="../js/templates.js"></script>
+    <script src="../js/metrics.js"></script>
+    <script src="../js/search.js"></script>
+    <script src="../js/notifications.js"></script>
+    <script src="../js/autosave.js"></script>
+    <script src="../js/tool-indicator.js"></script>
+    <script src="../js/shortcuts.js"></script>
+    <script src="../js/app.js"></script>
+</body>
+</html>

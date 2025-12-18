@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projetos - Claude Sessions</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <script>
+        document.documentElement.dataset.theme = 'light';
+    </script>
+</head>
+<body>
+    <div class="container">
+        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
+
+        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
+            <div class="debug-visual-header">
+                <h3>Debug Info</h3>
+                <a class="debug-header-link" href="index.html" title="Ir para o chat">⟲ Chat</a>
+            </div>
+            <div class="debug-visual-content" id="debug-visual-content">
+                <div class="debug-log"></div>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div id="sessions-list" class="messages sessions-list"></div>
+        </div>
+    </div>
+
+    <script src="../js/debug-visual.js"></script>
+    <script>
+        window.addEventListener('load', async () => {
+            const container = document.getElementById('sessions-list');
+
+            function getUserLabelOverride(sessionId) {
+                if (!sessionId) return '';
+                try {
+                    return (localStorage.getItem(`session_label:${sessionId}`) || '').trim();
+                } catch (e) {
+                    return '';
+                }
+            }
+
+            function setUserLabelOverride(sessionId, label) {
+                if (!sessionId) return;
+                try {
+                    const value = (label || '').trim();
+                    if (!value) {
+                        localStorage.removeItem(`session_label:${sessionId}`);
+                    } else {
+                        localStorage.setItem(`session_label:${sessionId}`, value.slice(0, 80));
+                    }
+                } catch (e) {}
+            }
+
+            function renderModelLine(session) {
+                const base = `🤖 ${session.model || 'Modelo'}`;
+                const override = getUserLabelOverride(session.session_id);
+                const inferred = (session.label || '').trim();
+                const label = override || inferred;
+                return label ? `${base} / ${label}` : base;
+            }
+
+            try {
+                const response = await fetch(`${window.location.origin}/sessions`);
+                const data = await response.json();
+
+                window.debugVisual?.log('success', data.count + ' sessões encontradas');
+
+                if (data.sessions.length === 0) {
+                    container.innerHTML = '<p class="empty-state">Nenhuma sessão encontrada</p>';
+                    return;
+                }
+
+                // Detectar última sessão acessada via localStorage ou documento.referrer
+                const lastSessionId = localStorage.getItem('last_session_id');
+
+                data.sessions.forEach((session, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'session-card';
+
+                    // Marcar sessão mais recente como ativa
+                    const isActive = index === 0;
+                    if (isActive) {
+                        card.classList.add('active-session');
+                    }
+
+                    const filePath = (session.file || '').replace(/\\/g, '/');
+                    const projectFolder = filePath.split('/').slice(-2, -1)[0] || 'Projeto desconhecido';
+                    const updated = new Date(session.updated_at).toLocaleString('pt-BR');
+
+                    const activeBadge = isActive ? '<span class="active-badge">✨ Atual</span>' : '';
+
+                    card.innerHTML = `
+                        <div class="session-card-header">
+                            <div>
+                                <h3>🗂️ ${projectFolder}</h3>
+                                <p class="session-card-subtitle">${session.file_name}</p>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                ${activeBadge}
+                                <span class="session-card-badge">${session.message_count} mensagens</span>
+                                <button class="rename-session-btn" data-session-id="${session.session_id}" title="Renomear/Tag">✏️</button>
+                                <button class="delete-session-btn" data-session-id="${session.session_id}" title="Deletar sessão">🗑️</button>
+                            </div>
+                        </div>
+                        <div class="session-card-meta">
+                            <div class="session-model-line">${renderModelLine(session)}</div>
+                            <div class="session-card-date">📅 ${updated}</div>
+                        </div>
+                    `;
+
+                    card.onclick = (e) => {
+                        if (e.target.classList.contains('delete-session-btn')) {
+                            return;
+                        }
+                        window.location.href = 'session-viewer.html?session_id=' + session.session_id;
+                    };
+
+                    const deleteBtn = card.querySelector('.delete-session-btn');
+                    deleteBtn.onclick = async (e) => {
+                        e.stopPropagation();
+
+                        try {
+                            const isClaude = String(session.session_id || '').startsWith('claude:');
+                            let url = `${window.location.origin}/sessions/${encodeURIComponent(session.session_id)}`;
+
+                            // Para Claude Code: deletar o arquivo .jsonl diretamente
+                            // (o backend detecta pelo prefixo claude:)
+
+                            const response = await fetch(url, { method: 'DELETE' });
+
+                            const result = await response.json();
+
+                            if (result.success) {
+                                const action = result.action || 'deleted';
+                                window.debugVisual?.log('success', `Sessão removida (${action}): ` + session.file_name);
+                                card.remove();
+                            } else {
+                                window.debugVisual?.log('error', 'Erro ao deletar: ' + (result.error || 'Falha desconhecida'));
+                            }
+                        } catch (error) {
+                            window.debugVisual?.log('error', 'Erro ao deletar sessão: ' + error.message);
+                        }
+                    };
+
+                    const renameBtn = card.querySelector('.rename-session-btn');
+                    if (renameBtn) {
+                        renameBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            const current = getUserLabelOverride(session.session_id) || (session.label || '');
+                            const next = prompt('Nome/Tag da sessão (ex.: Ana Luiza, Felipe). Deixe vazio para remover.', current || '');
+                            if (next === null) return;
+                            setUserLabelOverride(session.session_id, next);
+                            const line = card.querySelector('.session-model-line');
+                            if (line) line.textContent = renderModelLine(session);
+                        };
+                    }
+
+                    container.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('Erro:', error);
+                window.debugVisual?.log('error', 'Falha ao carregar: ' + error.message);
+                container.innerHTML = '<p class="empty-state error">❌ Erro ao carregar sessões</p>';
+            }
+        });
+    </script>
+</body>
+</html>
