@@ -13,19 +13,18 @@
 </head>
 <body>
     <div class="container">
-        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
-
-        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
-            <div class="debug-visual-header">
-                <h3 id="session-title">Session Info</h3>
-                <a id="back-to-projects" class="debug-header-link" href="index_projects.html" title="Voltar para lista">⟲ Projetos</a>
-            </div>
-            <div class="debug-visual-content">
-                <div class="debug-log" id="session-info"></div>
-            </div>
-        </div>
-
         <div class="chat-container">
+            <div class="chat-toolbar">
+                <div class="toolbar-left">
+                    <!-- Espaço para futuros botões -->
+                </div>
+                <div class="toolbar-right">
+                    <a href="index_projects.html" class="toolbar-link" title="Voltar para projetos" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                        <span>🗂️</span>
+                        <span>Projetos</span>
+                    </a>
+                </div>
+            </div>
             <div id="selection-toolbar" class="selection-toolbar" style="display: none;">
                 <div class="selection-actions">
                     <button id="select-all-btn" class="selection-btn">Selecionar tudo</button>
@@ -65,7 +64,6 @@
         </div>
     </div>
 
-    <script src="../js/debug-visual.js"></script>
     <script>
         if (window.marked) {
             marked.setOptions({
@@ -451,8 +449,6 @@
 
         async function loadSession(sessionId) {
             const container = document.getElementById('messages');
-            const infoLog = document.getElementById('session-info');
-            const title = document.getElementById('session-title');
 
             messagesContainer = container;
 
@@ -464,16 +460,6 @@
                     container.innerHTML = '<p style="text-align:center;padding:3rem;color:#ef4444">❌ ' + data.error + '</p>';
                     return;
                 }
-
-                const model = data.messages.find(m => m.message?.model)?.message?.model || 'unknown';
-                title.textContent = 'Session - ' + sessionId.substring(0, 8) + '...';
-                const backBtn = document.getElementById('back-to-projects');
-                if (backBtn) {
-                    backBtn.onclick = () => window.location.href = 'index_projects.html';
-                    backBtn.innerHTML = '⟲ Projetos';
-                }
-
-                infoLog.innerHTML = '<div class="debug-entry debug-entry-info"><span class="debug-time">ID</span><span class="debug-icon">📝</span><span class="debug-msg">' + sessionId + '</span></div><div class="debug-entry debug-entry-info"><span class="debug-time">Model</span><span class="debug-icon">🤖</span><span class="debug-msg">' + model + '</span></div><div class="debug-entry debug-entry-success"><span class="debug-time">Count</span><span class="debug-icon">💬</span><span class="debug-msg">' + data.count + ' mensagens</span></div>';
 
                 selectedEntries.clear();
                 currentEntries = Array.isArray(data.messages)
