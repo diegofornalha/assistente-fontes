@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=dados
-WorkingDirectory=/home/dados/assistente-dados/backend-fontes
+WorkingDirectory=/home/dados/assistente-dados/backend-dados
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
 Restart=always

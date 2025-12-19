@@ -723,3 +723,74 @@ Utilize o conteúdo adicional abaixo, se relevante:
                 "error": str(e)
             }
         }
+
+def generate_conversation_summary(messages: list, max_length: int = 500) -> str:
+    """
+    Gera resumo de uma conversa usando LLM.
+
+    Args:
+        messages: Lista de mensagens no formato [{'role': 'user'|'assistant', 'content': '...'}]
+        max_length: Comprimento máximo do resumo (padrão: 500 caracteres)
+
+    Returns:
+        Resumo formatado da conversa
+    """
+    if not messages:
+        return "Conversa vazia."
+
+    # Extrair texto das mensagens
+    conversation_text = ""
+    for msg in messages:
+        role = msg.get('role', '').lower()
+        content = msg.get('content', '').strip()
+        if content:
+            prefix = "Usuário" if role == 'user' else "Assistente"
+            conversation_text += f"{prefix}: {content}\n\n"
+
+    if not conversation_text.strip():
+        return "Conversa sem conteúdo textual."
+
+    # Truncar se muito longo (limitar a ~3000 caracteres para o prompt)
+    if len(conversation_text) > 3000:
+        conversation_text = conversation_text[:3000] + "\n\n[... conversação truncada ...]"
+
+    prompt = f"""
+Por favor, crie um resumo conciso desta conversa em português brasileiro.
+
+DIRETRIZES:
+- Máximo de {max_length} caracteres
+- 2-3 frases apenas
+- Destaque os tópicos principais discutidos
+- Mencione conclusões ou decisões importantes
+- Se houver próximos passos mencionados, inclua-os
+- Use linguagem clara e objetiva
+- Não use markdown ou formatação especial
+
+CONVERSA:
+{conversation_text}
+
+RESUMO:
+"""
+
+    try:
+        response = client.messages.create(
+            model="MiniMax-M2",
+            max_tokens=300,
+            system="Você é um assistente especializado em criar resumos concisos e úteis de conversas. Responda SEMPRE em português do Brasil.",
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3
+        )
+
+        summary = response.content[0].text.strip()
+
+        # Garantir que não excede o limite
+        if len(summary) > max_length:
+            summary = summary[:max_length-3] + "..."
+
+        return summary
+
+    except Exception as e:
+        print(f"❌ Erro ao gerar resumo: {e}")
+        return f"Erro ao gerar resumo: {str(e)}"

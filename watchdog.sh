@@ -3,7 +3,7 @@
 
 PORT=8182
 VENV="/home/dados/assistente-dados/.venv/bin/python"
-DIR="/home/dados/assistente-dados/backend-fontes"
+DIR="/home/dados/assistente-dados/backend-dados"
 LOG="/home/dados/assistente-dados/server.log"
 
 while true; do

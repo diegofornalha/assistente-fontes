@@ -1016,6 +1016,11 @@ class ClaudeChatApp {
         }
 
         this.saveLocalHistory();
+
+        // Atualizar o resumo da conversa
+        if (window.conversationSummary) {
+            window.conversationSummary.updateHistory(this.localHistory);
+        }
     }
 
     restoreHistory() {
@@ -1046,6 +1051,11 @@ class ClaudeChatApp {
         this.messageCount = this.localHistory.length;
         this.updateMessageCount();
         this.scrollToBottom({ force: true, behavior: 'auto' });
+
+        // Atualizar o resumo da conversa com o histórico restaurado
+        if (window.conversationSummary) {
+            window.conversationSummary.updateHistory(this.localHistory);
+        }
     }
 
     startNewChat() {

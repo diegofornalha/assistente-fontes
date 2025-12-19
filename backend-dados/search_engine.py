@@ -15,7 +15,7 @@ load_dotenv()
 
 # Caminhos absolutos (não dependem do diretório atual ao rodar o uvicorn)
 BASE_DIR = Path(__file__).resolve().parent.parent      # /assistente-fontes
-BACKEND_DIR = Path(__file__).resolve().parent          # /assistente-fontes/backend-fontes
+BACKEND_DIR = Path(__file__).resolve().parent          # /assistente-fontes/backend-dados
 
 # 📁 Diretório e caminho do índice
 INDEX_DIR = str(BASE_DIR / "storage")

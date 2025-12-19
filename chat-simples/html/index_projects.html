@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projetos - Claude Sessions</title>
     <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/summary-modal.css">
     <script>
         document.documentElement.dataset.theme = 'light';
     </script>
@@ -77,6 +78,7 @@
                 data.sessions.forEach((session, index) => {
                     const card = document.createElement('div');
                     card.className = 'session-card';
+                    card.dataset.sessionId = session.session_id;
 
                     // Marcar sessão mais recente como ativa
                     const isActive = index === 0;
@@ -90,19 +92,29 @@
 
                     const activeBadge = isActive ? '<span class="active-badge">✨ Atual</span>' : '';
 
+                    // Exibir título e resumo se existirem
+                    const titleDisplay = session.title ? `<div class="session-title-display">${session.title}</div>` : '';
+                    const summaryDisplay = session.summary ? `
+                        <div class="session-summary-preview">
+                            <div class="preview-text">${session.summary}</div>
+                        </div>
+                    ` : '<div class="session-summary-preview empty"></div>';
+
                     card.innerHTML = `
-                        <div class="session-card-header">
+                        <div class="session-card-header session-header">
                             <div>
                                 <h3>🗂️ ${projectFolder}</h3>
                                 <p class="session-card-subtitle">${session.file_name}</p>
+                                ${titleDisplay}
                             </div>
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 ${activeBadge}
                                 <span class="session-card-badge">${session.message_count} mensagens</span>
-                                <button class="rename-session-btn" data-session-id="${session.session_id}" title="Renomear/Tag" style="pointer-events: auto; position: relative; z-index: 10; cursor: pointer;">✏️</button>
+                                <button class="rename-session-btn" data-session-id="${session.session_id}" title="Gerenciar sessão (título e resumo)" style="pointer-events: auto; position: relative; z-index: 10; cursor: pointer;">✨</button>
                                 <button class="delete-session-btn" data-session-id="${session.session_id}" title="Deletar sessão" style="pointer-events: auto; position: relative; z-index: 10; cursor: pointer;">🗑️</button>
                             </div>
                         </div>
+                        ${summaryDisplay}
                         <div class="session-card-meta">
                             <div class="session-model-line">${renderModelLine(session)}</div>
                             <div class="session-card-date">📅 ${updated}</div>
@@ -195,14 +207,28 @@
 
                     const renameBtn = card.querySelector('.rename-session-btn');
                     if (renameBtn) {
-                        renameBtn.onclick = (e) => {
+                        renameBtn.onclick = async (e) => {
                             e.stopPropagation();
-                            const current = getUserLabelOverride(session.session_id) || (session.label || '');
-                            const next = prompt('Nome/Tag da sessão (ex.: Ana Luiza, Felipe). Deixe vazio para remover.', current || '');
-                            if (next === null) return;
-                            setUserLabelOverride(session.session_id, next);
-                            const line = card.querySelector('.session-model-line');
-                            if (line) line.textContent = renderModelLine(session);
+
+                            // Aguardar o SessionManager ser inicializado
+                            if (!window.sessionManager) {
+                                // Aguardar um pouco e tentar novamente
+                                await new Promise(resolve => setTimeout(resolve, 100));
+                                if (!window.sessionManager) {
+                                    alert('Carregando gerenciador de sessões...');
+                                    return;
+                                }
+                            }
+
+                            // Carregar metadados atuais
+                            const metadata = await window.sessionManager.loadSessionMetadata(session.session_id);
+
+                            // Abrir modal com metadados carregados
+                            window.sessionManager.openModal(
+                                session.session_id,
+                                metadata?.title || '',
+                                metadata?.summary || ''
+                            );
                         };
                     }
 
@@ -215,5 +241,7 @@
             }
         });
     </script>
+
+    <script src="../js/session-manager.js"></script>
 </body>
 </html>

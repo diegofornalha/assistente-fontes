@@ -34,6 +34,9 @@
                     <button id="new-chat-btn" class="toolbar-link" style="border: none; background: none; cursor: pointer; color: inherit; font: inherit;" title="Iniciar novo chat">✨ Novo Chat</button>
                 </div>
                 <div class="toolbar-right">
+                    <button id="summary-btn" class="toolbar-link" type="button" title="Ver resumo da conversa atual" style="border: none; cursor: pointer; color: inherit; font: inherit;">
+                        📊 Resumo
+                    </button>
                     <span id="status" class="status-pill">🟡</span>
                     <button id="theme-toggle" class="toolbar-link" type="button" title="Alternar tema (claro/escuro)" style="border: none; cursor: pointer; color: inherit; font: inherit;">
                         🌓 Tema
@@ -84,5 +87,72 @@
     <script src="../js/tool-indicator.js"></script>
     <script src="../js/shortcuts.js"></script>
     <script src="../js/app.js"></script>
+    <script src="../js/conversation-summary.js"></script>
+
+    <!-- Modal de Resumo da Conversa -->
+    <div id="conversation-summary-modal" class="summary-modal">
+        <div class="summary-modal-content">
+            <button class="summary-modal-close" id="close-summary-modal" title="Fechar">&times;</button>
+            <h2>📊 Resumo da Conversa</h2>
+
+            <div class="summary-section">
+                <h3>📝 Resumo Geral</h3>
+                <div id="summary-overview" class="summary-box">
+                    <p class="empty-message">Nenhuma conversa iniciada ainda.</p>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>🎯 Tópicos Abordados</h3>
+                <div id="summary-topics" class="summary-box">
+                    <p class="empty-message">Nenhum tópico identificado.</p>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>📚 Módulos/Aulas Cobertos</h3>
+                <div id="summary-modules" class="summary-box">
+                    <p class="empty-message">Nenhum módulo ou aula foi mencionado.</p>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>💡 Insights Principais</h3>
+                <div id="summary-insights" class="summary-box">
+                    <p class="empty-message">Nenhum insight foi gerado ainda.</p>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>🚀 Progresso na Jornada</h3>
+                <div id="summary-progress" class="summary-box">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text" class="progress-text">0% do curso concluído</p>
+                </div>
+            </div>
+
+            <div class="summary-section">
+                <h3>➡️ Próximos Passos Sugeridos</h3>
+                <div id="summary-suggestions" class="summary-box">
+                    <ul id="suggestions-list" class="suggestions-list">
+                        <li>Continue a conversa para receber sugestões personalizadas</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="summary-actions">
+                <button id="regenerate-summary-btn" class="summary-btn summary-btn-secondary">
+                    <span class="btn-icon">🔄</span>
+                    Regenerar Resumo
+                </button>
+                <button id="export-summary-btn" class="summary-btn summary-btn-primary">
+                    <span class="btn-icon">📤</span>
+                    Exportar Resumo
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

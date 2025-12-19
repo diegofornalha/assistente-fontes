@@ -60,10 +60,25 @@ def _ensure_session_meta_table(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS session_meta (
             session_id TEXT PRIMARY KEY,
             hidden INTEGER DEFAULT 0,
+            title TEXT,
+            summary TEXT,
+            tags TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """
     )
+    # Verificar se a coluna summary já existe (para migrations)
+    cursor.execute("PRAGMA table_info(session_meta)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    # Adicionar colunas que podem não existir
+    if 'title' not in columns:
+        cursor.execute("ALTER TABLE session_meta ADD COLUMN title TEXT")
+    if 'summary' not in columns:
+        cursor.execute("ALTER TABLE session_meta ADD COLUMN summary TEXT")
+    if 'tags' not in columns:
+        cursor.execute("ALTER TABLE session_meta ADD COLUMN tags TEXT")
+
     conn.commit()
 
 def _get_hidden_session_ids(conn: sqlite3.Connection) -> set[str]:
@@ -89,6 +104,49 @@ def _set_session_hidden(conn: sqlite3.Connection, session_id: str, hidden: bool)
         (session_id, 1 if hidden else 0),
     )
     conn.commit()
+
+def _save_session_metadata(conn: sqlite3.Connection, session_id: str, title: Optional[str] = None,
+                           summary: Optional[str] = None, tags: Optional[str] = None) -> None:
+    """
+    Salva metadados da sessão (título, resumo, tags).
+    """
+    _ensure_session_meta_table(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO session_meta(session_id, title, summary, tags, updated_at)
+        VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(session_id) DO UPDATE SET
+            title=COALESCE(excluded.title, session_meta.title),
+            summary=COALESCE(excluded.summary, session_meta.summary),
+            tags=COALESCE(excluded.tags, session_meta.tags),
+            updated_at=CURRENT_TIMESTAMP
+        """,
+        (session_id, title, summary, tags),
+    )
+    conn.commit()
+
+def _get_session_metadata(conn: sqlite3.Connection, session_id: str) -> dict:
+    """
+    Recupera metadados da sessão.
+    """
+    _ensure_session_meta_table(conn)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT session_id, hidden, title, summary, tags, updated_at FROM session_meta WHERE session_id = ?",
+        (session_id,)
+    )
+    row = cursor.fetchone()
+    if row:
+        return {
+            'session_id': row[0],
+            'hidden': bool(row[1]),
+            'title': row[2],
+            'summary': row[3],
+            'tags': row[4],
+            'updated_at': row[5]
+        }
+    return {}
 
 def _safe_iso_from_mtime(path: Path) -> str:
     try:
@@ -298,7 +356,7 @@ def _load_claude_session_entries(session_uuid: str) -> tuple[list[dict[str, Any]
 
     return (entries, model)
 
-# Servir arquivos estáticos do chat-simples (sempre funciona, mesmo rodando de backend-fontes/)
+# Servir arquivos estáticos do chat-simples (sempre funciona, mesmo rodando de backend-dados/)
 app.mount("/css", StaticFiles(directory=str(CHAT_DIR / "css")), name="css")
 app.mount("/js", StaticFiles(directory=str(CHAT_DIR / "js")), name="js")
 app.mount("/html", StaticFiles(directory=str(CHAT_DIR / "html")), name="html")
@@ -632,6 +690,12 @@ def list_sessions():
         sid = _normalize_session_id(usuario)
         if sid in hidden_ids:
             continue
+
+        # Buscar metadados da sessão
+        conn = sqlite3.connect(LOGS_DB_PATH)
+        metadata = _get_session_metadata(conn, sid)
+        conn.close()
+
         sessions.append(
             {
                 "session_id": sid,
@@ -640,6 +704,8 @@ def list_sessions():
                 "updated_at": updated_at,
                 "message_count": int(message_count or 0),
                 "model": "MiniMax-M2",
+                "title": metadata.get('title'),
+                "summary": metadata.get('summary'),
             }
         )
 
@@ -652,6 +718,12 @@ def list_sessions():
         if session_id in hidden_ids:
             continue
         inferred_label = _infer_claude_label_from_jsonl(jsonl_path)
+
+        # Buscar metadados da sessão
+        conn = sqlite3.connect(LOGS_DB_PATH)
+        metadata = _get_session_metadata(conn, session_id)
+        conn.close()
+
         sessions.append(
             {
                 "session_id": session_id,
@@ -661,6 +733,8 @@ def list_sessions():
                 "message_count": _count_jsonl_lines(jsonl_path),
                 "model": "Claude Code",
                 "label": inferred_label,
+                "title": metadata.get('title'),
+                "summary": metadata.get('summary'),
             }
         )
 
@@ -780,6 +854,98 @@ def delete_session(session_id: str):
     conn.commit()
     conn.close()
     return JSONResponse({"success": True, "deleted": deleted})
+
+@app.post("/sessions/{session_id}/summary")
+def generate_session_summary(session_id: str, request: Request):
+    """
+    Gera resumo da sessão usando LLM.
+    """
+    from gpt_utils import generate_conversation_summary
+
+    conn = sqlite3.connect(LOGS_DB_PATH)
+    _ensure_logs_table(conn)
+
+    # Extrair mensagens da sessão
+    messages = []
+    if isinstance(session_id, str) and session_id.startswith(CLAUDE_SESSION_PREFIX):
+        # Sessão do Claude Code (JSONL)
+        claude_uuid = session_id.split(CLAUDE_SESSION_PREFIX, 1)[1]
+        entries, model = _load_claude_session_entries(claude_uuid)
+        # Converter para formato esperado pela função de resumo
+        for entry in entries:
+            if entry.get('type') == 'message':
+                msg = entry.get('message', {})
+                role = 'assistant' if msg.get('role') == 'assistant' else 'user'
+                content = msg.get('content', {})
+                # Extrair texto do conteúdo
+                if isinstance(content, dict):
+                    text = content.get('text', '')
+                elif isinstance(content, str):
+                    text = content
+                else:
+                    text = str(content)
+                if text:
+                    messages.append({'role': role, 'content': text})
+    else:
+        # Sessão do logs.db (WebSocket)
+        usernames = _session_usernames(session_id)
+        if usernames:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT usuario, pergunta, resposta, data FROM logs WHERE usuario IN (?, ?) ORDER BY data ASC",
+                (usernames[0], usernames[1])
+            )
+            rows = cursor.fetchall()
+            for usuario, pergunta, resposta, data in rows:
+                if pergunta:
+                    messages.append({'role': 'user', 'content': pergunta})
+                if resposta:
+                    messages.append({'role': 'assistant', 'content': resposta})
+
+    conn.close()
+
+    # Gerar resumo
+    summary = generate_conversation_summary(messages, max_length=500)
+
+    # Salvar resumo no session_meta
+    conn = sqlite3.connect(LOGS_DB_PATH)
+    _save_session_metadata(conn, session_id, summary=summary)
+    conn.close()
+
+    return JSONResponse({"success": True, "summary": summary})
+
+@app.put("/sessions/{session_id}/metadata")
+def save_session_metadata(session_id: str, request: Request):
+    """
+    Salva metadados da sessão (título, resumo, tags).
+    """
+    try:
+        payload = request.json()
+        title = payload.get('title')
+        summary = payload.get('summary')
+        tags = payload.get('tags')
+
+        conn = sqlite3.connect(LOGS_DB_PATH)
+        _save_session_metadata(conn, session_id, title=title, summary=summary, tags=tags)
+        conn.close()
+
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+@app.get("/sessions/{session_id}/metadata")
+def get_session_metadata(session_id: str):
+    """
+    Recupera metadados da sessão.
+    """
+    conn = sqlite3.connect(LOGS_DB_PATH)
+    metadata = _get_session_metadata(conn, session_id)
+    conn.close()
+
+    if not metadata:
+        return JSONResponse({"success": False, "error": "Metadados não encontrados"}, status_code=404)
+
+    return JSONResponse({"success": True, "metadata": metadata})
 
 @app.delete("/sessions/{session_id}/messages")
 async def delete_session_message(session_id: str, request: Request):

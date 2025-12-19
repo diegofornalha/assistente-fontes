@@ -8,7 +8,7 @@
 
 ### 1. Navegar para o diretório do backend
 ```bash
-cd /home/fontes/assistente-fontes/backend-fontes
+cd /home/fontes/assistente-fontes/backend-dados
 ```
 
 ### 2. Ativar o ambiente virtual
@@ -36,7 +36,7 @@ Após executar os comandos acima, a aplicação estará disponível em:
 
 ```
 /home/fontes/assistente-fontes/
-├── backend-fontes/          # Código do servidor FastAPI
+├── backend-dados/          # Código do servidor FastAPI
 │   ├── main.py             # Arquivo principal
 │   ├── search_engine.py    # Motor de busca semântica
 │   ├── gpt_utils.py        # Integração com IA
@@ -77,10 +77,10 @@ Pressione `Ctrl+C` no terminal onde o servidor está rodando.
 ## Troubleshooting
 
 ### Erro: "No module named 'search_engine'"
-- **Solução**: Certifique-se de estar no diretório `/home/fontes/assistente-fontes/backend-fontes` antes de executar o uvicorn
+- **Solução**: Certifique-se de estar no diretório `/home/fontes/assistente-fontes/backend-dados` antes de executar o uvicorn
 
 ### Erro: "Directory 'chat-simples/css' does not exist"
-- **Solução**: Execute o comando a partir de `/home/fontes/assistente-fontes/backend-fontes` com o ambiente virtual ativado
+- **Solução**: Execute o comando a partir de `/home/fontes/assistente-fontes/backend-dados` com o ambiente virtual ativado
 
 ### Erro: "uvicorn: command not found"
 - **Solução**: Ative o ambiente virtual: `source ../.venv/bin/activate`
@@ -90,7 +90,7 @@ Pressione `Ctrl+C` no terminal onde o servidor está rodando.
 ### Execução com PYTHONPATH (diretório raiz)
 ```bash
 cd /home/fontes/assistente-fontes
-PYTHONPATH=/home/fontes/assistente-fontes/backend-fontes:$PYTHONPATH .venv/bin/python -m uvicorn backend-fontes.main:app --reload --host 0.0.0.0 --port 8181
+PYTHONPATH=/home/fontes/assistente-fontes/backend-dados:$PYTHONPATH .venv/bin/python -m uvicorn backend-dados.main:app --reload --host 0.0.0.0 --port 8181
 ```
 
 ### Verificar se a porta está em uso

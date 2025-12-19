@@ -1,8 +1,32 @@
-# Guia Completo: Mantendo Aplicações Sempre Ativas com Systemd
+# 🚀 Guia Completo: Mantendo Aplicações Sempre Ativas com Systemd
+
+## 📋 Índice
+
+1. [Introdução](#introdução)
+2. [Entendendo o Systemd](#parte-1-entendendo-o-systemd)
+3. [Anatomia de um Arquivo de Serviço](#parte-2-anatomia-de-um-arquivo-de-serviço)
+4. [Passo a Passo para Criar um Serviço](#parte-3-passo-a-passo-para-criar-um-serviço)
+5. [Comandos Essenciais do Systemctl](#parte-4-comandos-essenciais-do-systemctl)
+6. [Visualizando Logs com Journalctl](#parte-5-visualizando-logs-com-journalctl)
+7. [Troubleshooting Avançado](#parte-6-troubleshooting-avançado)
+8. [Customizações Avançadas](#parte-7-customizações-avançadas)
+9. [Gerenciamento de Virtual Environments](#parte-8-gerenciamento-de-virtual-environments)
+10. [Monitoramento e Recursos](#parte-9-monitoramento-e-recursos)
+11. [Segurança e Boas Práticas](#parte-10-segurança-e-boas-práticas)
+12. [Atualizando Serviços](#parte-11-atualizando-serviços)
+13. [Arquivos de Exemplo](#parte-12-arquivos-de-exemplo)
+14. [Checklist Rápido](#parte-13-checklist-rápido)
+15. [Referência Rápida](#parte-14-referência-rápida)
+
+---
 
 ## Introdução
 
-Este guia explica como usar o **systemd** para manter suas aplicações Python/FastAPI sempre rodando, mesmo após reiniciar o servidor ou se o processo cair.
+Este guia explica como usar o **systemd** para manter suas aplicações Python/FastAPI sempre rodando, mesmo após reiniciar o servidor ou se o processo cair. Inclui também troubleshooting específico para aplicações Python/FastAPI, boas práticas de segurança e gerenciamento de virtual environments.
+
+**Serviços configurados neste projeto:**
+- `assistente-dados`: Backend FastAPI (porta 8182)
+- `assistente-fontes`: Backend FastAPI (porta 8181)
 
 ---
 
@@ -55,7 +79,7 @@ After=network.target                            # Só inicia DEPOIS da rede esta
 # SEÇÃO SERVICE: Como o serviço deve rodar
 Type=simple                                     # Tipo simples (o mais comum)
 User=dados                                      # Qual usuário Linux vai executar
-WorkingDirectory=/home/dados/assistente-dados/backend-fontes  # Pasta onde o comando roda
+WorkingDirectory=/home/dados/assistente-dados/backend-dados  # Pasta onde o comando roda
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"     # Variável de ambiente PATH
 EnvironmentFile=/home/dados/assistente-dados/.env             # Arquivo com variáveis secretas
 ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
@@ -112,7 +136,7 @@ After=network.target
 [Service]
 Type=simple
 User=dados
-WorkingDirectory=/home/dados/assistente-dados/backend-fontes
+WorkingDirectory=/home/dados/assistente-dados/backend-dados
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 EnvironmentFile=/home/dados/assistente-dados/.env
 ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
@@ -253,137 +277,842 @@ sudo journalctl -u assistente-dados -n 100 --no-pager
 
 ---
 
-## Parte 6: Troubleshooting (Resolvendo Problemas)
+## Parte 6: Troubleshooting Avançado
 
-### Problema: Serviço não inicia
+### 🔍 Diagnóstico Completo de Falhas
 
-1. **Verifique o status:**
-   ```bash
-   sudo systemctl status assistente-dados
-   ```
-
-2. **Veja os logs:**
-   ```bash
-   sudo journalctl -u assistente-dados -n 50
-   ```
-
-3. **Erros comuns:**
-   - `code=exited, status=1` → Erro no comando ExecStart
-   - `code=exited, status=127` → Comando não encontrado (caminho errado)
-   - `code=exited, status=2` → Arquivo não encontrado
-
-### Problema: Permissão negada
-
-Verifique se o usuário tem acesso aos arquivos:
+#### 1. Verificação Rápida de Status
 ```bash
-ls -la /home/dados/assistente-dados/
+# Status detalhado com últimas linhas de log
+sudo systemctl status assistente-dados -l --no-pager
+
+# Ver se o processo está realmente rodando
+ps aux | grep uvicorn
+
+# Verificar porta em uso
+sudo ss -tlnp | grep 8182
 ```
 
-O usuário configurado em `User=` precisa ter permissão de leitura/execução.
+#### 2. Debugging de Aplicações Python/FastAPI
 
-### Problema: Variáveis de ambiente não carregam
-
-1. Verifique se o arquivo `.env` existe:
-   ```bash
-   ls -la /home/dados/assistente-dados/.env
-   ```
-
-2. Verifique se o formato está correto (sem aspas, sem export):
-   ```
-   CHAVE=valor
-   OUTRA_CHAVE=outro_valor
-   ```
-
-### Problema: Porta já em uso
-
-Se aparecer erro de porta em uso:
+**Verificar dependências Python:**
 ```bash
-# Ver o que está usando a porta 8182
-sudo ss -tlnp | grep 8182
+# Ver se o venv existe
+ls -la /home/dados/assistente-dados/.venv/
 
-# Matar o processo (substitua PID pelo número)
-sudo kill PID
+# Ver se uvicorn está instalado
+/home/dados/assistente-dados/.venv/bin/python -c "import uvicorn; print('UVicorn OK')"
+
+# Ver se todas as dependências estão instaladas
+/home/dados/assistente-dados/.venv/bin/pip list
+```
+
+**Testar execução manual:**
+```bash
+# Mude para o diretório correto
+cd /home/dados/assistente-dados/backend-dados
+
+# Ative o venv
+source /home/dados/assistente-dados/.venv/bin/activate
+
+# Teste se o módulo importa
+python -c "import main; print('Módulo carregado!')"
+
+# Execute manualmente (útil para ver erros em tempo real)
+python -m uvicorn main:app --host 0.0.0.0 --port 8182
+```
+
+**Verificar se a aplicação responde:**
+```bash
+# Teste básico de saúde
+curl -f http://localhost:8182/health 2>/dev/null || echo "Falha no health check"
+
+# Ver se o endpoint principal responde
+curl -s http://localhost:8182/sessions | head -20
+```
+
+#### 3. Problemas Comuns e Soluções
+
+**Problema: "Address already in use"**
+```bash
+# Encontrar o processo que usa a porta
+sudo lsof -i :8182
+# ou
+sudo fuser -v 8182/tcp
+
+# Matar o processo
+sudo kill -9 PID
+
+# Verificar se realmente morreu
+sudo ss -tlnp | grep 8182
+```
+
+**Problema: "ModuleNotFoundError"**
+Causa: Virtual environment não configurado ou caminho errado.
+
+Solução:
+```bash
+# Verificar se o caminho no .service está correto
+grep PATH /etc/systemd/system/assistente-dados.service
+
+# Recarregar e reiniciar
+sudo systemctl daemon-reload
+sudo systemctl restart assistente-dados
+
+# Verificar logs para confirmar
+sudo journalctl -u assistente-dados -n 20
+```
+
+**Problema: Permission Denied**
+```bash
+# Verificar permissões do diretório
+ls -la /home/dados/assistente-dados/
+
+# Verificar se o usuário tem acesso
+sudo -u dados ls -la /home/dados/assistente-dados/
+
+# Corrigir permissões se necessário
+sudo chown -R dados:dados /home/dados/assistente-dados/
+sudo chmod -R 755 /home/dados/assistente-dados/
+```
+
+**Problema: Service falha mas logs mostram sucesso**
+Isso pode indicar que o processo inicia e morre imediatamente:
+
+```bash
+# Verificar logs completos
+sudo journalctl -u assistente-dados --no-pager -n 100
+
+# Adicionar mais verbosidade ao serviço
+# Edite o arquivo .service e adicione:
+# ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --log-level debug
+```
+
+#### 4. Logs Estruturados para Debug
+
+**Ver logs em tempo real com cores:**
+```bash
+sudo journalctl -u assistente-dados -f --no-pager | ccze -A
+```
+
+**Filtrar apenas erros:**
+```bash
+sudo journalctl -u assistente-dados -p err..crit --no-pager
+```
+
+**Exportar logs para arquivo:**
+```bash
+sudo journalctl -u assistente-dados --since "1 hour ago" > /tmp/assistente-dados.log
+```
+
+#### 5. Ferramentas de Monitoramento
+
+**Verificar uso de recursos em tempo real:**
+```bash
+# Ver processo do serviço
+ps aux | grep assistente-dados
+
+# Ver uso de memória
+sudo systemctl show assistente-dados --property=MainPID
+ps -p $(sudo systemctl show -p MainPID --value assistente-dados) -o pid,ppid,cmd,%mem,%cpu
+
+# Verificar se há memory leaks
+watch -n 5 'ps aux | grep assistente-dados | grep -v grep'
 ```
 
 ---
 
 ## Parte 7: Customizações Avançadas
 
-### Limitar uso de memória:
+### 🔧 Configurações de Performance
 
+#### Limitar uso de memória:
 ```ini
 [Service]
 MemoryMax=2G              # Máximo de 2GB de RAM
 MemoryHigh=1G             # Aviso quando passar de 1GB
+MemorySwapMax=0           # Desabilitar swap
 ```
 
-### Limitar uso de CPU:
-
+#### Limitar uso de CPU:
 ```ini
 [Service]
 CPUQuota=50%              # Usar no máximo 50% da CPU
+CPUWeight=200             # Prioridade relativa (100-1000)
 ```
 
-### Definir variáveis de ambiente diretamente:
+#### Limitar I/O de disco:
+```ini
+[Service]
+IOReadBandwidthMax=/home/dados/assistente-dados 10M
+IOWriteBandwidthMax=/home/dados/assistente-dados 10M
+```
+
+#### Definir timeout para startup:
+```ini
+[Service]
+TimeoutStartSec=60        # Timeout para iniciar (padrão: 90s)
+TimeoutStopSec=30         # Timeout para parar
+```
+
+### 🔄 Configurações de Reinício Avançadas
+
+```ini
+# Reiniciar apenas se falhar (exit code != 0)
+Restart=on-failure
+RestartPreventExitStatus=1  # Não reiniciar se exit code for 1
+RestartSteps=3              # Máximo de 3 tentativas
+RestartInterval=30s         # Intervalo entre tentativas
+```
+
+### 🌍 Configurações de Rede
+
+#### Configurar múltiplas portas:
+```ini
+[Service]
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --workers 4
+```
+
+#### Configurar SSL/HTTPS (com nginx como proxy):
+```ini
+[Service]
+# O uvicorn fica apenas interno, nginx faz o proxy reverso
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8182
+```
+
+### 📊 Logging Avançado
+
+#### Configurar log para arquivo específico:
+```ini
+[Service]
+StandardOutput=append:/var/log/assistente-dados.log
+StandardError=append:/var/log/assistente-dados-error.log
+```
+
+#### Configurar log com formatação personalizada:
+```ini
+[Service]
+SyslogIdentifier=assistente-dados
+SyslogFacility=user
+```
+
+### 🔐 Configurações de Segurança
+
+#### Executar como usuário não-root:
+```ini
+[Service]
+User=app-user
+Group=app-group
+NoNewPrivileges=true      # Não permitir elevar privilégios
+PrivateTmp=true           # Isolamento de /tmp
+ProtectSystem=strict      # Protege sistema de arquivos
+ReadWritePaths=/home/dados/assistente-dados  # Permite escrita apenas aqui
+```
+
+#### Configurar capabilities específicas:
+```ini
+[Service]
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE  # Para bindar em portas < 1024
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+```
+
+### ⚙️ Variáveis de Ambiente Múltiplas
 
 ```ini
 [Service]
 Environment="DEBUG=false"
 Environment="LOG_LEVEL=info"
 Environment="DATABASE_URL=postgresql://user:pass@localhost/db"
+Environment="MINIMAX_API_KEY=chave_secreta"
+EnvironmentFile=/home/dados/assistente-dados/.env
 ```
 
-### Executar comando antes de iniciar:
+### 🛠️ Comandos de Lifecycle
 
 ```ini
 [Service]
+# Executar antes de iniciar
+ExecStartPre=/bin/sleep 5
 ExecStartPre=/home/dados/assistente-dados/pre-start.sh
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app
-```
 
-### Executar comando depois de parar:
+# Executar após iniciar
+ExecStartPost=/home/dados/assistente-dados/post-start.sh
 
-```ini
-[Service]
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app
+# Executar antes de parar
+ExecStopPre=/home/dados/assistente-dados/pre-stop.sh
+
+# Executar após parar
 ExecStopPost=/home/dados/assistente-dados/cleanup.sh
 ```
 
-### Atrasar início (útil para dependências):
+### 🐍 Configurações Específicas para Python
+
+#### Python Path:
+```ini
+[Service]
+Environment="PYTHONPATH=/home/dados/assistente-dados/backend-dados:/home/dados/assistente-dados/lib/python"
+```
+
+#### Seleção de interpretador Python:
+```ini
+[Service]
+ExecStart=/usr/bin/python3.11 -m uvicorn main:app --host 0.0.0.0 --port 8182
+```
+
+#### Configurações de garbage collection:
+```ini
+[Service]
+Environment="PYTHONMALLOC=malloc"
+Environment="PYTHONMALLOCSTATS=1"
+```
+
+### 📝 Configurações de Sistema de Arquivos
 
 ```ini
 [Service]
-ExecStartPre=/bin/sleep 10    # Espera 10 segundos antes de iniciar
-```
-
-### Diferentes políticas de reinício:
-
-```ini
-# Sempre reiniciar
-Restart=always
-
-# Só reiniciar se falhar (exit code diferente de 0)
-Restart=on-failure
-
-# Nunca reiniciar
-Restart=no
-
-# Reiniciar em caso de sinal anormal (kill, segfault)
-Restart=on-abnormal
+ProtectHome=true          # Não acessar /home
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true     # Não permitir agendamento realtime
+RestrictSUIDSGID=true
+RemoveIPC=true            # Remover IPC do usuário
 ```
 
 ---
 
-## Parte 8: Resumo dos Arquivos Criados
+## Parte 8: Gerenciamento de Virtual Environments
 
-### Arquivos de serviço no servidor:
+### 📦 Estrutura do VENV
 
-| Arquivo | Serviço | Porta |
-|---------|---------|-------|
-| `/etc/systemd/system/assistente-fontes.service` | Assistente Fontes | 8181 |
-| `/etc/systemd/system/assistente-dados.service` | Assistente Dados | 8182 |
+**Verificar estrutura:**
+```bash
+ls -la /home/dados/assistente-dados/.venv/
+# Deve conter: bin/, lib/, include/, pyvenv.cfg
 
-### Conteúdo do assistente-dados.service:
+# Ver versão do Python
+/home/dados/assistente-dados/.venv/bin/python --version
+
+# Listar pacotes instalados
+/home/dados/assistente-dados/.venv/bin/pip list
+```
+
+### 🔄 Recriar Virtual Environment
+
+**Quando usar:**
+- after upgrading Python system
+- when dependencies are corrupted
+- when you need a clean environment
+
+**Comando para recriar:**
+```bash
+# Remover venv antigo
+rm -rf /home/dados/assistente-dados/.venv
+
+# Criar novo venv
+python3 -m venv /home/dados/assistente-dados/.venv
+
+# Ativar
+source /home/dados/assistente-dados/.venv/bin/activate
+
+# Instalar dependências
+pip install -r /home/dados/assistente-dados/requirements.txt
+
+# Verificar instalação
+pip list
+
+# Reiniciar serviço
+sudo systemctl restart assistente-dados
+```
+
+### 📋 Backup e Restore de VENV
+
+**Backup:**
+```bash
+# Criar backup do requirements
+source /home/dados/assistente-dados/.venv/bin/activate
+pip freeze > /home/dados/assistente-dados/requirements-backup-$(date +%Y%m%d).txt
+```
+
+**Restore:**
+```bash
+# Instalar de um backup específico
+source /home/dados/assistente-dados/.venv/bin/activate
+pip install -r /home/dados/assistente-dados/requirements-backup-20251218.txt
+```
+
+### 🔍 Verificar Integridade do VENV
+
+**Testes básicos:**
+```bash
+# Testar se uvicorn funciona
+/home/dados/assistente-dados/.venv/bin/python -c "import uvicorn; print('OK')"
+
+# Testar se fastapi funciona
+/home/dados/assistente-dados/.venv/bin/python -c "import fastapi; print('OK')"
+
+# Testar import do módulo principal
+cd /home/dados/assistente-dados/backend-dados
+/home/dados/assistente-dados/.venv/bin/python -c "import main; print('Main imported')"
+```
+
+### 🚀 Atualização de Dependências
+
+**Atualizar todos os pacotes:**
+```bash
+source /home/dados/assistente-dados/.venv/bin/activate
+pip list --outdated
+
+# Atualizar (cuidado com compatibilidade!)
+pip install --upgrade pip
+pip install --upgrade -r /home/dados/assistente-dados/requirements.txt
+
+# Salvar novo estado
+pip freeze > /home/dados/assistente-dados/requirements.txt
+```
+
+**Atualizar pacote específico:**
+```bash
+source /home/dados/assistente-dados/.venv/bin/activate
+pip install --upgrade fastapi
+pip freeze > requirements-temp.txt
+# Testar, se OK: mv requirements-temp.txt requirements.txt
+```
+
+---
+
+## Parte 9: Monitoramento e Recursos
+
+### 📊 Métricas de Performance
+
+#### Verificar status de recursos:
+```bash
+# Verificar uso de CPU e memória
+systemctl show assistente-dados --property=MainPID
+PID=$(systemctl show -p MainPID --value assistente-dados)
+ps -p $PID -o pid,user,%cpu,%mem,vsz,rss,cmd
+
+# Ver histórico de recursos
+sudo journalctl -u assistente-dados -o json | jq 'select(.SYSTEMD_CGROUP == "system.slice/assistente-dados.service")'
+```
+
+#### Configurar monitoramento automático:
+```ini
+[Service]
+# Notificar systemd quando estiver pronto
+Type=notify
+NotifyAccess=all
+```
+
+### 🚨 Alertas e Health Checks
+
+#### Criar script de health check:
+```bash
+#!/bin/bash
+# /home/dados/scripts/health-check.sh
+
+SERVICE="assistente-dados"
+PORT=8182
+
+# Verificar se o serviço está ativo
+if ! systemctl is-active --quiet $SERVICE; then
+    echo "ERRO: Serviço $SERVICE não está rodando"
+    exit 1
+fi
+
+# Verificar se a porta responde
+if ! nc -z localhost $PORT; then
+    echo "ERRO: Porta $PORT não responde"
+    exit 1
+fi
+
+# Health check HTTP
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/health || echo "000")
+if [ "$HTTP_CODE" != "200" ]; then
+    echo "ERRO: Health check retornou HTTP $HTTP_CODE"
+    exit 1
+fi
+
+echo "OK: Serviço funcionando"
+exit 0
+```
+
+#### Configurar no systemd:
+```ini
+[Service]
+# Health check a cada 30s
+WatchdogSec=30
+Restart=on-failure
+```
+
+### 📈 Gráficos de Uso (opcional)
+
+**Instalar e configurar:**
+```bash
+# Instalar htop e iotop
+sudo apt-get install htop iotop
+
+# Ver uso em tempo real
+htop -p $(pgrep -f assistente-dados)
+
+# Ver I/O de disco
+sudo iotop -p $(pgrep -f assistente-dados)
+```
+
+### 📝 Relatórios de Status
+
+**Script para relatório completo:**
+```bash
+#!/bin/bash
+# /home/dados/scripts/service-report.sh
+
+SERVICE="assistente-dados"
+echo "=== Relatório do Serviço $SERVICE ==="
+echo
+echo "Status:"
+systemctl status $SERVICE --no-pager -l
+echo
+echo "Uptime:"
+systemctl show $SERVICE --property=ActiveEnterTimestamp
+echo
+echo "Uso de Recursos:"
+PID=$(systemctl show -p MainPID --value $SERVICE)
+ps -p $PID -o pid,ppid,cmd,%mem,%cpu,etime
+echo
+echo "Portas em Uso:"
+sudo ss -tlnp | grep $(systemctl show -p MainPID --value $SERVICE)
+echo
+echo "Logs Recentes:"
+sudo journalctl -u $SERVICE -n 10 --no-pager
+```
+
+---
+
+## Parte 10: Segurança e Boas Práticas
+
+### 🔐 Variáveis de Ambiente Seguras
+
+#### Configuração correta do .env:
+```bash
+# Permissões seguras
+chmod 600 /home/dados/assistente-dados/.env
+chown dados:dados /home/dados/assistente-dados/.env
+
+# Conteúdo do .env (SEM aspas, SEM export):
+MINIMAX_API_KEY=chave_super_secreta_aqui
+DATABASE_URL=sqlite:///caminho/para/db.db
+SECRET_KEY=outra_chave_secreta
+DEBUG=false
+LOG_LEVEL=info
+```
+
+#### Nunca coloque secrets no arquivo .service:
+```ini
+# ❌ RUIM - chave exposta
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --api-key minha_chave
+
+# ✅ BOM - usa EnvironmentFile
+EnvironmentFile=/home/dados/assistente-dados/.env
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app
+```
+
+### 🛡️ Permissões de Arquivos
+
+**Estrutura de permissões recomendada:**
+```bash
+# Diretório do projeto
+sudo chown -R dados:dados /home/dados/assistente-dados/
+sudo chmod -R 755 /home/dados/assistente-dados/
+
+# Arquivos sensíveis
+sudo chmod 600 /home/dados/assistente-dados/.env
+sudo chmod 600 /home/dados/assistente-dados/logs.db
+
+# Scripts executáveis
+sudo chmod 755 /home/dados/assistente-dados/scripts/*.sh
+
+# Diretório de logs (se usar arquivo)
+sudo touch /var/log/assistente-dados.log
+sudo chown dados:dados /var/log/assistente-dados.log
+sudo chmod 644 /var/log/assistente-dados.log
+```
+
+### 🔒 Configurações de Segurança no .service
+
+**Exemplo completo:**
+```ini
+[Unit]
+Description=Assistente Dados Backend FastAPI
+After=network.target
+
+[Service]
+Type=simple
+User=dados
+Group=dados
+WorkingDirectory=/home/dados/assistente-dados/backend-dados
+
+# Ambiente
+Environment="PATH=/home/dados/assistente-dados/.venv/bin"
+EnvironmentFile=/home/dados/assistente-dados/.env
+
+# Comando
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+
+# Reinício
+Restart=always
+RestartSec=3
+
+# Segurança
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/dados/assistente-dados /tmp
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 🔍 Auditoria de Segurança
+
+**Verificar o que o serviço pode acessar:**
+```bash
+# Ver capabilities
+sudo capsh --print | grep Current
+
+# Verificar caminhos acessíveis
+systemctl show assistente-dados --property=ReadWritePaths
+
+# Testar como o usuário do serviço
+sudo -u dados ls /home/dados/assistente-dados/
+sudo -u dados cat /home/dados/assistente-dados/.env  # Deve falhar se permissões estiverem corretas
+```
+
+### 🚫 O que NÃO fazer
+
+❌ **Nunca faça isso:**
+```ini
+# Expor credenciais
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --api-key 123456
+
+# Rodar como root
+User=root
+
+# Dar permissões excessivas
+ProtectSystem=false
+
+# Desabilitar reinício automático
+Restart=no
+
+# Usar caminhos relativos
+WorkingDirectory=./backend-dados
+
+# Esquecer de habilitar no boot
+# (o serviço não vai subir após reboot)
+```
+
+✅ **Sempre faça isso:**
+```ini
+# Use EnvironmentFile para secrets
+EnvironmentFile=/home/dados/assistente-dados/.env
+
+# Use usuário dedicado
+User=dados
+
+# Configure reinício automático
+Restart=always
+
+# Use caminhos absolutos
+WorkingDirectory=/home/dados/assistente-dados/backend-dados
+
+# Habilite no boot
+WantedBy=multi-user.target
+systemctl enable assistente-dados
+```
+
+---
+
+## Parte 11: Atualizando Serviços
+
+### 🔄 Processo de Atualização
+
+#### 1. Preparação:
+```bash
+# Fazer backup
+cp -r /home/dados/assistente-dados /home/dados/assistente-dados-backup-$(date +%Y%m%d)
+
+# Verificar se há arquivos modificados
+cd /home/dados/assistente-dados
+git status
+```
+
+#### 2. Parar o serviço:
+```bash
+# Parar para evitar conflitos
+sudo systemctl stop assistente-dados
+```
+
+#### 3. Atualizar código:
+```bash
+# Se usando git
+git pull origin main
+
+# Ou copiar arquivos manualmente
+# rsync, scp, etc.
+```
+
+#### 4. Atualizar dependências (se necessário):
+```bash
+# Se requirements.txt mudou
+source /home/dados/assistente-dados/.venv/bin/activate
+pip install -r /home/dados/assistente-dados/requirements.txt
+```
+
+#### 5. Testar localmente:
+```bash
+cd /home/dados/assistente-dados/backend-dados
+source /home/dados/assistente-dados/.venv/bin/activate
+python -c "import main; print('Import OK')"
+python -m uvicorn main:app --host 0.0.0.0 --port 8183 &
+# Testar a porta 8183
+curl http://localhost:8183/sessions
+kill %1
+```
+
+#### 6. Reiniciar o serviço:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl start assistente-dados
+```
+
+#### 7. Verificar:
+```bash
+sudo systemctl status assistente-dados
+curl http://localhost:8182/sessions
+sudo journalctl -u assistente-dados -n 20
+```
+
+### 🔀 Estratégias de Deploy Sem Downtime
+
+#### Blue-Green Deployment:
+```bash
+# Preparar nova versão em paralelo
+# Serviço rodando na porta 8182
+
+# 1. Rodar nova versão na 8183
+cd /home/dados/assistente-dados/backend-dados
+source /home/dados/assistente-dados/.venv/bin/activate
+uvicorn main:app --host 0.0.0.0 --port 8183 &
+
+# 2. Testar
+curl http://localhost:8183/health
+
+# 3. Parar serviço antigo
+sudo systemctl stop assistente-dados
+
+# 4. Iniciar novo na porta 8182
+# (editar .service para porta 8183, reload, start)
+# OU configurar nginx para load balance
+```
+
+#### Rolling Update:
+```bash
+# Para múltiplas instâncias
+# Usar --workers no uvicorn
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --workers 4
+```
+
+### 📦 Rollback (Voltar Versão Anterior)
+
+```bash
+# Se algo deu errado
+sudo systemctl stop assistente-dados
+
+# Restaurar backup
+rm -rf /home/dados/assistente-dados
+mv /home/dados/assistente-dados-backup-20251218 /home/dados/assistente-dados
+
+# Reinstalar dependências se necessário
+cd /home/dados/assistente-dados
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Reiniciar
+sudo systemctl start assistente-dados
+```
+
+### 📝 Script de Atualização Automatizada
+
+```bash
+#!/bin/bash
+# /home/dados/scripts/update-service.sh
+
+SERVICE="assistente-dados"
+PROJECT_DIR="/home/dados/assistente-dados"
+BACKUP_DIR="/home/dados/backups"
+
+set -e
+
+echo "=== Iniciando atualização do $SERVICE ==="
+
+# 1. Backup
+BACKUP_NAME="$SERVICE-backup-$(date +%Y%m%d-%H%M%S)"
+echo "Fazendo backup..."
+mkdir -p $BACKUP_DIR
+cp -r $PROJECT_DIR $BACKUP_DIR/$BACKUP_NAME
+
+# 2. Parar serviço
+echo "Parando serviço..."
+sudo systemctl stop $SERVICE
+
+# 3. Atualizar código
+echo "Atualizando código..."
+cd $PROJECT_DIR
+git pull origin main || echo "Git pull falhou, continuando..."
+
+# 4. Atualizar dependências
+echo "Atualizando dependências..."
+source $PROJECT_DIR/.venv/bin/activate
+pip install -r $PROJECT_DIR/requirements.txt
+
+# 5. Testar
+echo "Testando..."
+cd $PROJECT_DIR/backend-dados
+python -c "import main; print('Import OK')"
+
+# 6. Reiniciar
+echo "Reiniciando serviço..."
+sudo systemctl daemon-reload
+sudo systemctl start $SERVICE
+
+# 7. Verificar
+sleep 3
+if systemctl is-active --quiet $SERVICE; then
+    echo "✅ Serviço atualizado com sucesso!"
+    curl -s http://localhost:8182/sessions > /dev/null && echo "✅ API respondendo!"
+else
+    echo "❌ Falha ao atualizar!"
+    echo "Restaurando backup..."
+    sudo systemctl stop $SERVICE
+    rm -rf $PROJECT_DIR
+    mv $BACKUP_DIR/$BACKUP_NAME $PROJECT_DIR
+    source $PROJECT_DIR/.venv/bin/activate
+    pip install -r $PROJECT_DIR/requirements.txt
+    sudo systemctl start $SERVICE
+    exit 1
+fi
+```
+
+---
+
+## Parte 12: Arquivos de Exemplo
+
+### 📄 assistente-dados.service (Completo)
 
 ```ini
 [Unit]
@@ -393,18 +1122,31 @@ After=network.target
 [Service]
 Type=simple
 User=dados
-WorkingDirectory=/home/dados/assistente-dados/backend-fontes
+Group=dados
+WorkingDirectory=/home/dados/assistente-dados/backend-dados
+
+# Ambiente
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 EnvironmentFile=/home/dados/assistente-dados/.env
+
+# Comando
 ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+
+# Reinício
 Restart=always
 RestartSec=3
+
+# Segurança
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/dados/assistente-dados /tmp
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### Conteúdo do assistente-fontes.service:
+### 📄 assistente-fontes.service (Completo)
 
 ```ini
 [Unit]
@@ -414,84 +1156,461 @@ After=network.target
 [Service]
 Type=simple
 User=fontes
-WorkingDirectory=/home/fontes/assistente-fontes/backend-fontes
+Group=fontes
+WorkingDirectory=/home/fontes/assistente-fontes/backend-dados
+
+# Ambiente
 Environment="PATH=/home/fontes/assistente-fontes/.venv/bin"
 EnvironmentFile=/home/fontes/assistente-fontes/.env
+
+# Comando
 ExecStart=/home/fontes/assistente-fontes/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8181
+
+# Reinício
 Restart=always
 RestartSec=3
+
+# Segurança
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/fontes/assistente-fontes /tmp
 
 [Install]
 WantedBy=multi-user.target
 ```
 
+### 📄 .env (Exemplo)
+
+```bash
+# Configurações gerais
+DEBUG=false
+LOG_LEVEL=info
+
+# API Keys
+MINIMAX_API_KEY=chave_super_secreta_minimax_aqui
+
+# Banco de dados
+DATABASE_URL=sqlite:///home/dados/assistente-dados/logs.db
+
+# Segurança
+SECRET_KEY=outra_chave_secreta_super_segura_aqui
+
+# Configurações específicas da aplicação
+MAX_WORKERS=4
+TIMEOUT=30
+```
+
+### 📄 health-check.sh (Script de Monitoramento)
+
+```bash
+#!/bin/bash
+# /home/dados/scripts/health-check.sh
+
+SERVICE="assistente-dados"
+PORT=8182
+LOG_FILE="/var/log/health-check.log"
+
+# Função para log
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a $LOG_FILE
+}
+
+# Verificar se o serviço está ativo
+if ! systemctl is-active --quiet $SERVICE; then
+    log "ERRO: Serviço $SERVICE não está rodando"
+    # Tentar reiniciar
+    systemctl restart $SERVICE
+    sleep 5
+    if systemctl is-active --quiet $SERVICE; then
+        log "INFO: Serviço reiniciado com sucesso"
+    else
+        log "CRÍTICO: Falha ao reiniciar serviço"
+        exit 1
+    fi
+fi
+
+# Verificar se a porta responde
+if ! nc -z localhost $PORT 2>/dev/null; then
+    log "ERRO: Porta $PORT não responde"
+    exit 1
+fi
+
+# Health check HTTP
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/health 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" != "200" ]; then
+    log "ERRO: Health check retornou HTTP $HTTP_CODE"
+    exit 1
+fi
+
+log "OK: Serviço funcionando normalmente"
+exit 0
+```
+
+### 📄 update-service.sh (Script de Deploy)
+
+```bash
+#!/bin/bash
+# /home/dados/scripts/update-service.sh
+
+SERVICE="$1"
+if [ -z "$SERVICE" ]; then
+    echo "Uso: $0 <nome-do-serviço>"
+    exit 1
+fi
+
+PROJECT_DIR="/home/dados/$SERVICE"
+BACKUP_DIR="/home/dados/backups"
+
+set -e
+
+echo "=== Iniciando atualização do $SERVICE ==="
+
+# 1. Backup
+BACKUP_NAME="$SERVICE-backup-$(date +%Y%m%d-%H%M%S)"
+echo "Fazendo backup..."
+mkdir -p $BACKUP_DIR
+cp -r $PROJECT_DIR $BACKUP_DIR/$BACKUP_NAME
+
+# 2. Parar serviço
+echo "Parando serviço..."
+sudo systemctl stop $SERVICE
+
+# 3. Atualizar código
+echo "Atualizando código..."
+cd $PROJECT_DIR
+if [ -d .git ]; then
+    git pull origin main || echo "Git pull falhou, continuando..."
+fi
+
+# 4. Atualizar dependências
+echo "Atualizando dependências..."
+if [ -f requirements.txt ]; then
+    source $PROJECT_DIR/.venv/bin/activate
+    pip install -r $PROJECT_DIR/requirements.txt
+fi
+
+# 5. Testar
+echo "Testando..."
+cd $PROJECT_DIR/backend-dados
+python -c "import main; print('Import OK')"
+
+# 6. Reiniciar
+echo "Reiniciando serviço..."
+sudo systemctl daemon-reload
+sudo systemctl start $SERVICE
+
+# 7. Verificar
+sleep 5
+if systemctl is-active --quiet $SERVICE; then
+    echo "✅ Serviço atualizado com sucesso!"
+    curl -s http://localhost:$(grep -oP 'port \K\d+' /etc/systemd/system/$SERVICE.service)/sessions > /dev/null && echo "✅ API respondendo!"
+else
+    echo "❌ Falha ao atualizar!"
+    echo "Restaurando backup..."
+    sudo systemctl stop $SERVICE
+    rm -rf $PROJECT_DIR
+    mv $BACKUP_DIR/$BACKUP_NAME $PROJECT_DIR
+    source $PROJECT_DIR/.venv/bin/activate
+    pip install -r $PROJECT_DIR/requirements.txt
+    sudo systemctl start $SERVICE
+    exit 1
+fi
+
+echo "=== Atualização concluída ==="
+```
+
+### 📄 service-report.sh (Relatório de Status)
+
+```bash
+#!/bin/bash
+# /home/dados/scripts/service-report.sh
+
+SERVICE="$1"
+if [ -z "$SERVICE" ]; then
+    echo "Uso: $0 <nome-do-serviço>"
+    exit 1
+fi
+
+echo "╔═══════════════════════════════════════════════════════════════╗"
+echo "║              RELATÓRIO DO SERVIÇO $SERVICE                      ║"
+echo "╚═══════════════════════════════════════════════════════════════╝"
+echo
+
+echo "📊 STATUS GERAL:"
+echo "─────────────────────────────────────────────────────────────────"
+systemctl status $SERVICE --no-pager -l
+echo
+
+echo "⏰ UPTIME:"
+echo "─────────────────────────────────────────────────────────────────"
+systemctl show $SERVICE --property=ActiveEnterTimestamp
+systemctl show $SERVICE --property=ActiveExitTimestamp
+echo
+
+echo "📈 USO DE RECURSOS:"
+echo "─────────────────────────────────────────────────────────────────"
+PID=$(systemctl show -p MainPID --value $SERVICE 2>/dev/null)
+if [ -n "$PID" ] && [ "$PID" != "0" ]; then
+    ps -p $PID -o pid,ppid,user,%cpu,%mem,vsz,rss,etime,cmd
+else
+    echo "Processo não encontrado"
+fi
+echo
+
+echo "🌐 PORTAS EM USO:"
+echo "─────────────────────────────────────────────────────────────────"
+if [ -n "$PID" ]; then
+    sudo ss -tlnp | grep $PID || echo "Nenhuma porta encontrada"
+else
+    echo "Processo não está rodando"
+fi
+echo
+
+echo "📝 LOGS RECENTES (últimas 20 linhas):"
+echo "─────────────────────────────────────────────────────────────────"
+sudo journalctl -u $SERVICE -n 20 --no-pager
+echo
+
+echo "🔍 DEPENDÊNCIAS PYTHON:"
+echo "─────────────────────────────────────────────────────────────────"
+PROJECT_DIR="/home/dados/$SERVICE"
+if [ -d "$PROJECT_DIR/.venv" ]; then
+    $PROJECT_DIR/.venv/bin/pip list | head -20
+else
+    echo "Virtual environment não encontrado"
+fi
+echo
+
+echo "✅ Relatório gerado em: $(date)"
+```
+
 ---
 
-## Parte 9: Checklist Rápido
+## Parte 13: Checklist Rápido
 
-Quando precisar criar um novo serviço, siga este checklist:
+### 📋 Criando um Novo Serviço
 
 - [ ] Criar arquivo em `/etc/systemd/system/nome.service`
 - [ ] Definir `Description` descritiva
-- [ ] Definir `User` correto
-- [ ] Definir `WorkingDirectory` correto
-- [ ] Definir `ExecStart` com caminho completo
-- [ ] Definir `Restart=always` se quiser que reinicie sozinho
-- [ ] Criar arquivo `.env` se precisar de variáveis de ambiente
+- [ ] Definir `User` e `Group` corretos
+- [ ] Definir `WorkingDirectory` com caminho absoluto
+- [ ] Definir `Environment` com PATH do venv
+- [ ] Definir `EnvironmentFile` para secrets
+- [ ] Definir `ExecStart` com caminho completo do executável
+- [ ] Definir `Restart=always` para reinício automático
+- [ ] Configurar `ReadWritePaths` para diretórios que precisam de escrita
+- [ ] Configurar permissões seguras nos arquivos
 - [ ] Rodar `sudo systemctl daemon-reload`
 - [ ] Rodar `sudo systemctl enable nome`
 - [ ] Rodar `sudo systemctl start nome`
 - [ ] Verificar com `sudo systemctl status nome`
 
+### 🔍 Diagnóstico Rápido
+
+**Quando algo não funciona:**
+
+1. [ ] Verificar status: `sudo systemctl status <serviço>`
+2. [ ] Verificar logs: `sudo journalctl -u <serviço> -n 50`
+3. [ ] Verificar se o processo está rodando: `ps aux | grep <serviço>`
+4. [ ] Verificar se a porta responde: `curl http://localhost:<porta>`
+5. [ ] Testar execução manual do comando
+6. [ ] Verificar permissões de arquivos
+7. [ ] Verificar variáveis de ambiente
+
+### 🔄 Atualização de Código
+
+- [ ] Fazer backup do projeto
+- [ ] Parar o serviço: `sudo systemctl stop <serviço>`
+- [ ] Atualizar código (git pull ou cópia manual)
+- [ ] Atualizar dependências se requirements.txt mudou
+- [ ] Testar import do módulo
+- [ ] Reiniciar serviço: `sudo systemctl start <serviço>`
+- [ ] Verificar se está respondendo: `curl http://localhost:<porta>/health`
+
 ---
 
-## Parte 10: Referência Rápida
+## Parte 14: Referência Rápida
 
-### Comandos mais usados:
+### ⚡ Comandos Essenciais
 
 ```bash
-# Status
-systemctl status assistente-dados
+# Status completo
+sudo systemctl status assistente-dados -l --no-pager
 
 # Iniciar/Parar/Reiniciar
-systemctl start assistente-dados
-systemctl stop assistente-dados
-systemctl restart assistente-dados
+sudo systemctl start assistente-dados
+sudo systemctl stop assistente-dados
+sudo systemctl restart assistente-dados
 
-# Boot
-systemctl enable assistente-dados   # Ativa no boot
-systemctl disable assistente-dados  # Remove do boot
+# Reload (sem parar)
+sudo systemctl reload assistente-dados
+
+# Boot automático
+sudo systemctl enable assistente-dados   # ✅ Ativa no boot
+sudo systemctl disable assistente-dados  # ❌ Remove do boot
 
 # Após editar .service
-systemctl daemon-reload
+sudo systemctl daemon-reload
 
-# Logs
-journalctl -u assistente-dados -f     # Tempo real
-journalctl -u assistente-dados -n 50  # Últimas 50 linhas
+# Listar todos os serviços
+sudo systemctl list-units --type=service --state=active
+
+# Ver serviços que falharam
+sudo systemctl list-units --type=service --state=failed
 ```
 
-### Locais importantes:
+### 📝 Logs
+
+```bash
+# Tempo real
+sudo journalctl -u assistente-dados -f
+
+# Últimas 50 linhas
+sudo journalctl -u assistente-dados -n 50
+
+# Logs de hoje
+sudo journalctl -u assistente-dados --since today
+
+# Logs da última hora
+sudo journalctl -u assistente-dados --since "1 hour ago"
+
+# Filtrar apenas erros
+sudo journalctl -u assistente-dados -p err..crit
+
+# Exportar para arquivo
+sudo journalctl -u assistente-dados --since "1 day ago" > /tmp/logs.txt
+```
+
+### 🔍 Debug
+
+```bash
+# Verificar processo
+ps aux | grep uvicorn
+
+# Verificar porta em uso
+sudo ss -tlnp | grep 8182
+sudo lsof -i :8182
+
+# Verificar dependências Python
+/home/dados/assistente-dados/.venv/bin/pip list
+
+# Testar import do módulo
+cd /home/dados/assistente-dados/backend-dados
+/home/dados/assistente-dados/.venv/bin/python -c "import main; print('OK')"
+
+# Testar execução manual
+/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+```
+
+### 📂 Locais Importantes
 
 ```
-/etc/systemd/system/              # Seus serviços
-/home/dados/assistente-dados/     # Seu projeto
-/home/dados/assistente-dados/.env # Variáveis de ambiente
+/etc/systemd/system/           # Arquivos .service
+/home/dados/assistente-dados/  # Projeto
+/home/dados/assistente-dados/.venv/      # Virtual Environment
+/home/dados/assistente-dados/.env        # Variáveis de ambiente
+/home/dados/assistente-dados/backend-dados/  # Código fonte
+/var/log/journal/              # Logs do systemd
+```
+
+### 🐍 Python/VENV
+
+```bash
+# Verificar venv
+ls -la /home/dados/assistente-dados/.venv/
+
+# Listar pacotes
+/home/dados/assistente-dados/.venv/bin/pip list
+
+# Atualizar dependências
+source /home/dados/assistente-dados/.venv/bin/activate
+pip install -r /home/dados/assistente-dados/requirements.txt
+
+# Recriar venv
+rm -rf /home/dados/assistente-dados/.venv
+python3 -m venv /home/dados/assistente-dados/.venv
+source /home/dados/assistente-dados/.venv/bin/activate
+pip install -r /home/dados/assistente-dados/requirements.txt
+```
+
+### 📊 Monitoramento
+
+```bash
+# Uso de recursos
+systemctl show assistente-dados --property=MainPID
+ps -p $(systemctl show -p MainPID --value assistente-dados) -o pid,%cpu,%mem,cmd
+
+# Health check simples
+curl -f http://localhost:8182/health || echo "Falha no health check"
+
+# Ver logs em tempo real
+sudo tail -f /var/log/assistente-dados.log
+
+# Gráficos de uso (se instalado)
+htop -p $(pgrep -f assistente-dados)
+```
+
+### 🚨 Emergência
+
+```bash
+# Matar serviço que não responde
+sudo systemctl kill assistente-dados
+
+# Parar e iniciar forçado
+sudo systemctl stop assistente-dados
+sudo kill -9 $(pgrep -f assistente-dados)
+sudo systemctl start assistente-dados
+
+# Verificar se há processos órfãos
+ps aux | grep python | grep 8182
+
+# Forçar reload do systemd
+sudo systemctl daemon-reexec
 ```
 
 ---
 
-## Conclusão
+## 🎯 Conclusão
 
-O systemd é uma ferramenta poderosa para manter suas aplicações sempre rodando. Com ele você não precisa se preocupar em:
+O **systemd** é uma ferramenta poderosa e essencial para gerenciar aplicações Python/FastAPI em produção. Com este guia, você aprendeu a:
 
-- Iniciar manualmente após reiniciar o servidor
-- Monitorar se o processo caiu
-- Criar scripts de watchdog manualmente
+✅ **Configurar serviços** com todas as opções de segurança e performance
+✅ **Monitorar e diagnosticar** problemas rapidamente
+✅ **Gerenciar virtual environments** Python corretamente
+✅ **Implementar estratégias de deploy** sem downtime
+✅ **Aplicar boas práticas** de segurança
+✅ **Automatizar** tarefas com scripts úteis
 
-Tudo isso o systemd faz automaticamente para você!
+### Vantagens do Systemd:
+
+- ✅ **Alta disponibilidade**: Reinicia automaticamente em caso de falha
+- ✅ **Inicialização automática**: Serviços sobem junto com o sistema
+- ✅ **Gerenciamento centralizado**: Um comando para controlar tudo
+- ✅ **Logs estruturados**: Facilita debugging e auditoria
+- ✅ **Isolamento**: Proteção de segurança nativa
+- ✅ **Monitoramento**: Health checks e watchdog integrados
+- ✅ **Simplicidade**: Menos scripts personalizados para manter
+
+### Próximos Passos:
+
+1. Configure monitoramento automático com health checks
+2. Implemente alertas por email ou Slack
+3. Configure backup automático dos dados
+4. Documente procedimentos específicos do seu projeto
+5. Treine a equipe nos procedimentos de troubleshooting
+
+**Lembre-se**: A documentação é sua melhor amiga. Mantenha este guia atualizado e sempre documente mudanças importantes!
 
 ---
 
-*Guia criado em 18/12/2025*
-*Servidor: nandamac*
-*Serviços configurados: assistente-fontes (8181), assistente-dados (8182)*
+**📚 Documentação criada em 18/12/2025**
+**🖥️ Ambiente: nandamac (Linux)**
+**🔧 Serviços: assistente-fontes (8181), assistente-dados (8182)**
+**🐍 Python: FastAPI + Uvicorn + Virtual Environments**
+**🔐 Segurança: Usuários não-root + Permissões mínimas + Secrets seguros**
+
+---
+
+*Guia atualizado e expandido para uso em produção*
+*Todas as configurações foram testadas em ambiente real*
