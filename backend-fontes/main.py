@@ -161,8 +161,12 @@ def _should_include_claude_jsonl(path: Path) -> bool:
         pass
 
     try:
+        has_user_message = False
+        has_assistant_message = False
+        summary_only = True
+        
         with path.open("r", encoding="utf-8", errors="ignore") as f:
-            for _ in range(25):
+            for _ in range(50):  # Aumenta para 50 linhas para verificar melhor
                 raw = f.readline()
                 if not raw:
                     break
@@ -174,9 +178,18 @@ def _should_include_claude_jsonl(path: Path) -> bool:
                 except Exception:
                     continue
 
-                # Alguns arquivos podem ser só "summary"
-                if item.get("type") == "summary":
-                    return False
+                item_type = item.get("type")
+                
+                # Se encontrou mensagem de usuário ou assistente, não é só summary
+                if item_type == "user":
+                    has_user_message = True
+                    summary_only = False
+                elif item_type == "assistant":
+                    has_assistant_message = True
+                    summary_only = False
+                elif item_type == "summary":
+                    # Summary sozinho não conta como conteúdo real
+                    continue
 
                 # Sidechain/agent do Claude Code
                 if item.get("isSidechain") is True or item.get("agentId"):
@@ -189,8 +202,12 @@ def _should_include_claude_jsonl(path: Path) -> bool:
                     if isinstance(content, str) and content.strip().lower() == "warmup":
                         return False
 
-        # Fallback: se não encontramos nada conclusivo, ainda pode ser um log válido
-        return True
+        # Se o arquivo só tem summary e não tem mensagens reais, filtra
+        if summary_only:
+            return False
+            
+        # Se tem pelo menos uma mensagem de usuário ou assistente, inclui
+        return has_user_message or has_assistant_message
     except Exception:
         # Em caso de erro de leitura, não polui a lista
         return False

@@ -242,8 +242,58 @@
             return doc.body.innerHTML;
         }
 
+        function replaceInterruptedMessage(text) {
+            if (!text || typeof text !== 'string') return text;
+            // Substitui a mensagem de interrupção do JSONL por versão em português
+            return text.replace(
+                /\[Request interrupted by user\]/gi,
+                'Mensagem Interrompida pelo usuario'
+            );
+        }
+
+        // Função para substituir no DOM já renderizado (fallback)
+        function replaceInterruptedInDOM() {
+            // Busca em todos os elementos possíveis
+            const selectors = [
+                'p', 
+                'div.message-body', 
+                'div.message-content', 
+                'span',
+                '.message-content p',
+                '.message-body p',
+                'div.message.user p',
+                'div.message.assistant p'
+            ];
+            
+            selectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        // Substitui no textContent
+                        if (el.textContent && /\[Request interrupted by user\]/i.test(el.textContent)) {
+                            el.textContent = el.textContent.replace(
+                                /\[Request interrupted by user\]/gi,
+                                'Mensagem Interrompida pelo usuario'
+                            );
+                        }
+                        // Substitui no innerHTML (mais agressivo)
+                        if (el.innerHTML && /\[Request interrupted by user\]/i.test(el.innerHTML)) {
+                            el.innerHTML = el.innerHTML.replace(
+                                /\[Request interrupted by user\]/gi,
+                                'Mensagem Interrompida pelo usuario'
+                            );
+                        }
+                    });
+                } catch (e) {
+                    // Ignora erros de seletor inválido
+                }
+            });
+        }
+
         function renderMarkdownSafe(text) {
-            const raw = renderMarkdown(text);
+            // Primeiro substitui a mensagem de interrupção
+            const processedText = replaceInterruptedMessage(text);
+            const raw = renderMarkdown(processedText);
             return sanitizeHtml(raw);
         }
 
@@ -362,6 +412,40 @@
             loadSession(SESSION_ID);
         }
 
+        // Observer para substituir mensagens de interrupção em tempo real
+        const observer = new MutationObserver(() => {
+            replaceInterruptedInDOM();
+        });
+
+        // Função para inicializar substituição
+        function initInterruptionReplacement() {
+            const messagesContainer = document.getElementById('messages');
+            if (messagesContainer) {
+                observer.observe(messagesContainer, {
+                    childList: true,
+                    subtree: true,
+                    characterData: true
+                });
+                // Executa imediatamente e várias vezes para garantir
+                replaceInterruptedInDOM();
+                setTimeout(() => replaceInterruptedInDOM(), 100);
+                setTimeout(() => replaceInterruptedInDOM(), 500);
+                setTimeout(() => replaceInterruptedInDOM(), 1000);
+            }
+        }
+
+        // Inicia quando DOM estiver pronto
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initInterruptionReplacement);
+        } else {
+            initInterruptionReplacement();
+        }
+
+        // Também executa periodicamente como fallback (a cada 500ms)
+        setInterval(() => {
+            replaceInterruptedInDOM();
+        }, 500);
+
         async function loadSession(sessionId) {
             const container = document.getElementById('messages');
             const infoLog = document.getElementById('session-info');
@@ -395,6 +479,11 @@
 
                 initializeToolbar(container);
                 renderSessionEntries(container, currentEntries);
+
+                // Aplica substituição no DOM após renderização (fallback)
+                setTimeout(() => {
+                    replaceInterruptedInDOM();
+                }, 100);
 
                 container.scrollTop = container.scrollHeight;
                 initWS(sessionId);
@@ -756,12 +845,12 @@
 
             const content = message.content ?? message.text ?? '';
 
-            if (typeof content === 'string') {
-                return content.trim();
-            }
+            let text = '';
 
-            if (Array.isArray(content)) {
-                return content
+            if (typeof content === 'string') {
+                text = content.trim();
+            } else if (Array.isArray(content)) {
+                text = content
                     .filter(block => block && (block.type === 'text' || block.type === 'tool_result'))
                     .map(block => {
                         const content = block.text || block.content || '';
@@ -769,14 +858,13 @@
                     })
                     .filter(Boolean)
                     .join('\n');
+            } else if (typeof content === 'object' && content !== null) {
+                text = content.text || content.content || '';
+                text = typeof text === 'string' ? text.trim() : '';
             }
 
-            if (typeof content === 'object' && content !== null) {
-                const text = content.text || content.content || '';
-                return typeof text === 'string' ? text.trim() : '';
-            }
-
-            return '';
+            // Substitui mensagem de interrupção do JSONL
+            return replaceInterruptedMessage(text);
         }
 
         function createMessageCard(role, text, timestamp, entry, index) {
@@ -808,8 +896,20 @@
             const body = document.createElement('div');
             body.className = 'message-body';
 
-            body.innerHTML = renderMarkdownSafe(text);
+            // Garante que o texto seja substituído antes de renderizar
+            const processedText = replaceInterruptedMessage(text);
+            body.innerHTML = renderMarkdownSafe(processedText);
             enhanceCodeBlocks(body);
+            
+            // Aplica substituição novamente após renderização (garantia)
+            setTimeout(() => {
+                if (body.innerHTML.includes('[Request interrupted by user]')) {
+                    body.innerHTML = body.innerHTML.replace(
+                        /\[Request interrupted by user\]/gi,
+                        'Mensagem Interrompida pelo usuario'
+                    );
+                }
+            }, 50);
 
             content.appendChild(body);
             wrapper.append(header, content);

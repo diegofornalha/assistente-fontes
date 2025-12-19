@@ -8,6 +8,34 @@ function escapeHtml(text = '') {
     return div.innerHTML;
 }
 
+function replaceInterruptedMessage(text) {
+    if (!text || typeof text !== 'string') return text;
+    // Substitui a mensagem de interrupção do JSONL por versão em português
+    return text.replace(
+        /\[Request interrupted by user\]/gi,
+        'Mensagem Interrompida pelo usuario'
+    );
+}
+
+// Função para substituir no DOM já renderizado (fallback)
+function replaceInterruptedInDOM() {
+    const allElements = document.querySelectorAll('p, div.message-body, div.message-content, span, .message-content p');
+    allElements.forEach(el => {
+        if (el.textContent && el.textContent.includes('[Request interrupted by user]')) {
+            el.textContent = el.textContent.replace(
+                /\[Request interrupted by user\]/gi,
+                'Mensagem Interrompida pelo usuario'
+            );
+        }
+        if (el.innerHTML && el.innerHTML.includes('[Request interrupted by user]')) {
+            el.innerHTML = el.innerHTML.replace(
+                /\[Request interrupted by user\]/gi,
+                'Mensagem Interrompida pelo usuario'
+            );
+        }
+    });
+}
+
 function sanitizeHtml(html) {
     if (!html) return '';
     const parser = new DOMParser();
@@ -165,12 +193,15 @@ function basicMarkdownToHtml(markdownText = '') {
 function renderMarkdownSafe(text) {
     if (!text) return '';
 
+    // Primeiro substitui a mensagem de interrupção do JSONL
+    const processedText = replaceInterruptedMessage(text);
+
     if (window.marked) {
-        const raw = marked.parse(text);
+        const raw = marked.parse(processedText);
         return sanitizeHtml(raw);
     }
 
-    return sanitizeHtml(basicMarkdownToHtml(text));
+    return sanitizeHtml(basicMarkdownToHtml(processedText));
 }
 
 function truncateText(text, maxLength = 160) {
@@ -379,12 +410,21 @@ class ClaudeChatApp {
 
         this.ws.onclose = () => {
             const shouldReconnect = this.reconnectAttempts < this.maxReconnectAttempts;
+            const wasProcessing = this.currentMessage !== null || this.pendingAssistantContent !== '';
+            
             this.updateStatus('disconnected');
             this.sendButton && (this.sendButton.disabled = false);
 
+            // Se estava processando uma resposta, exibe mensagem amigável de interrupção
+            if (wasProcessing) {
+                this.handleRequestInterrupted();
+            }
+
             if (this.hasConnectedOnce) {
                 window.debugVisual?.log('warning', 'WebSocket desconectado');
-                this.showSystemMessage('Conexão perdida. Tentando reconectar...');
+                if (!wasProcessing) {
+                    this.showSystemMessage('Conexão perdida. Tentando reconectar...');
+                }
             }
 
             if (shouldReconnect) {
@@ -562,7 +602,17 @@ class ClaudeChatApp {
         if (!contentDiv) return;
 
         this.pendingAssistantContent = `${this.pendingAssistantContent}${trimmedChunk}`;
-        contentDiv.innerHTML = renderMarkdownSafe(this.pendingAssistantContent);
+        
+        // Substitui mensagem de interrupção por versão amigável
+        let displayContent = replaceInterruptedMessage(this.pendingAssistantContent);
+        if (displayContent.includes('Mensagem Interrompida pelo usuario')) {
+            displayContent = displayContent.replace(
+                /Mensagem Interrompida pelo usuario/g,
+                '⏸️ *Resposta interrompida pelo usuário* — Sem problemas! Você pode continuar nossa conversa a qualquer momento.'
+            );
+        }
+        
+        contentDiv.innerHTML = renderMarkdownSafe(displayContent);
 
         this.currentChunkCount = (this.currentChunkCount || 0) + 1;
 
@@ -572,7 +622,17 @@ class ClaudeChatApp {
     finalizeMessage(data) {
         this.hideTypingIndicator();
 
-        const finalText = data.content ?? this.pendingAssistantContent ?? '';
+        let finalText = data.content ?? this.pendingAssistantContent ?? '';
+        
+        // Primeiro substitui do formato JSONL, depois aplica versão amigável
+        finalText = replaceInterruptedMessage(finalText);
+        if (finalText.includes('Mensagem Interrompida pelo usuario')) {
+            finalText = finalText.replace(
+                /Mensagem Interrompida pelo usuario/g,
+                '⏸️ *Resposta interrompida pelo usuário* — Sem problemas! Você pode continuar nossa conversa a qualquer momento.'
+            );
+        }
+        
         const messageEl = this.currentMessage || this.ensureAssistantMessage();
         const contentDiv = this.currentMessageContent || messageEl.querySelector('.message-content');
 
@@ -1135,6 +1195,59 @@ class ClaudeChatApp {
             hour: '2-digit',
             minute: '2-digit'
         });
+    }
+
+    handleRequestInterrupted() {
+        // Verifica se há uma mensagem em processamento
+        if (!this.currentMessage && !this.pendingAssistantContent) {
+            return;
+        }
+
+        const messageEl = this.currentMessage || this.ensureAssistantMessage();
+        const contentDiv = this.currentMessageContent || messageEl.querySelector('.message-content');
+        
+        if (!contentDiv) return;
+
+        // Verifica se já tem a mensagem de interrupção
+        const currentContent = contentDiv.innerHTML || '';
+        if (currentContent.includes('interrompida') || currentContent.includes('interrupted')) {
+            return;
+        }
+
+        // Processa o conteúdo e substitui mensagem de interrupção
+        let processedContent = replaceInterruptedMessage(this.pendingAssistantContent || '');
+        
+        // Adiciona mensagem amigável de interrupção
+        const interruptionMessage = '<p style="opacity: 0.8; font-style: italic; margin-top: 0.5rem;">⏸️ <em>Resposta interrompida pelo usuário</em> — Sem problemas! Você pode continuar nossa conversa a qualquer momento.</p>';
+        
+        // Se já tem conteúdo, adiciona a mensagem ao final
+        if (processedContent && processedContent.trim()) {
+            // Se já contém a mensagem de interrupção, substitui por versão amigável
+            if (processedContent.includes('Mensagem Interrompida pelo usuario')) {
+                processedContent = processedContent.replace(
+                    /Mensagem Interrompida pelo usuario/g,
+                    '⏸️ *Resposta interrompida pelo usuário* — Sem problemas! Você pode continuar nossa conversa a qualquer momento.'
+                );
+                contentDiv.innerHTML = renderMarkdownSafe(processedContent);
+            } else {
+                contentDiv.innerHTML = renderMarkdownSafe(processedContent) + interruptionMessage;
+            }
+        } else {
+            contentDiv.innerHTML = interruptionMessage;
+        }
+
+        this.hideTypingIndicator();
+        if (this.sendButton) {
+            this.sendButton.disabled = false;
+        }
+
+        // Finaliza a mensagem
+        this.currentMessage = null;
+        this.currentMessageContent = null;
+        this.pendingAssistantContent = '';
+        this.currentChunkCount = 0;
+        
+        this.scrollToBottom({ behavior: 'smooth' });
     }
 }
 

@@ -101,8 +101,8 @@
                             <div style="display: flex; gap: 0.5rem; align-items: center;">
                                 ${activeBadge}
                                 <span class="session-card-badge">${session.message_count} mensagens</span>
-                                <button class="rename-session-btn" data-session-id="${session.session_id}" title="Renomear/Tag">✏️</button>
-                                <button class="delete-session-btn" data-session-id="${session.session_id}" title="Deletar sessão">🗑️</button>
+                                <button class="rename-session-btn" data-session-id="${session.session_id}" title="Renomear/Tag" style="pointer-events: auto; position: relative; z-index: 10; cursor: pointer;">✏️</button>
+                                <button class="delete-session-btn" data-session-id="${session.session_id}" title="Deletar sessão" style="pointer-events: auto; position: relative; z-index: 10; cursor: pointer;">🗑️</button>
                             </div>
                         </div>
                         <div class="session-card-meta">
@@ -112,38 +112,91 @@
                     `;
 
                     card.onclick = (e) => {
-                        if (e.target.classList.contains('delete-session-btn')) {
+                        // Não navega se clicou em botões ou seus filhos
+                        if (e.target.closest('.delete-session-btn') || 
+                            e.target.closest('.rename-session-btn') ||
+                            e.target.classList.contains('delete-session-btn') ||
+                            e.target.classList.contains('rename-session-btn')) {
                             return;
                         }
                         window.location.href = 'session-viewer.html?session_id=' + session.session_id;
                     };
 
                     const deleteBtn = card.querySelector('.delete-session-btn');
-                    deleteBtn.onclick = async (e) => {
-                        e.stopPropagation();
-
-                        try {
-                            const isClaude = String(session.session_id || '').startsWith('claude:');
-                            let url = `${window.location.origin}/sessions/${encodeURIComponent(session.session_id)}`;
-
-                            // Para Claude Code: deletar o arquivo .jsonl diretamente
-                            // (o backend detecta pelo prefixo claude:)
-
-                            const response = await fetch(url, { method: 'DELETE' });
-
-                            const result = await response.json();
-
-                            if (result.success) {
-                                const action = result.action || 'deleted';
-                                window.debugVisual?.log('success', `Sessão removida (${action}): ` + session.file_name);
-                                card.remove();
-                            } else {
-                                window.debugVisual?.log('error', 'Erro ao deletar: ' + (result.error || 'Falha desconhecida'));
+                    if (deleteBtn) {
+                        // Garante que o botão seja clicável
+                        deleteBtn.style.pointerEvents = 'auto';
+                        deleteBtn.style.position = 'relative';
+                        deleteBtn.style.zIndex = '10';
+                        deleteBtn.style.cursor = 'pointer';
+                        
+                        deleteBtn.onclick = async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Confirmação antes de deletar
+                            const confirmMessage = `Tem certeza que deseja deletar a sessão "${session.file_name}"?\n\nEsta ação não pode ser desfeita.`;
+                            if (!confirm(confirmMessage)) {
+                                return;
                             }
-                        } catch (error) {
-                            window.debugVisual?.log('error', 'Erro ao deletar sessão: ' + error.message);
-                        }
-                    };
+
+                            // Desabilita o botão durante a operação
+                            deleteBtn.disabled = true;
+                            deleteBtn.textContent = '⏳';
+                            deleteBtn.style.opacity = '0.5';
+                            deleteBtn.style.cursor = 'not-allowed';
+
+                            try {
+                                const sessionId = session.session_id;
+                                if (!sessionId) {
+                                    throw new Error('Session ID não encontrado');
+                                }
+
+                                const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId)}`;
+                                window.debugVisual?.log('info', `Deletando sessão: ${sessionId}`);
+
+                                const response = await fetch(url, { 
+                                    method: 'DELETE',
+                                    headers: {
+                                        'Content-Type': 'application/json'
+                                    }
+                                });
+
+                                if (!response.ok) {
+                                    const errorText = await response.text();
+                                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                                }
+
+                                const result = await response.json();
+
+                                if (result.success) {
+                                    const action = result.action || 'deleted';
+                                    window.debugVisual?.log('success', `✅ Sessão removida (${action}): ${session.file_name}`);
+                                    
+                                    // Adiciona animação de remoção
+                                    card.style.transition = 'opacity 0.3s, transform 0.3s';
+                                    card.style.opacity = '0';
+                                    card.style.transform = 'scale(0.9)';
+                                    
+                                    setTimeout(() => {
+                                        card.remove();
+                                    }, 300);
+                                } else {
+                                    throw new Error(result.error || 'Falha desconhecida ao deletar');
+                                }
+                            } catch (error) {
+                                console.error('Erro ao deletar sessão:', error);
+                                window.debugVisual?.log('error', `❌ Erro ao deletar: ${error.message}`);
+                                alert(`Erro ao deletar sessão:\n${error.message}`);
+                                
+                                // Restaura o botão
+                                deleteBtn.disabled = false;
+                                deleteBtn.textContent = '🗑️';
+                                deleteBtn.style.opacity = '1';
+                                deleteBtn.style.cursor = 'pointer';
+                            }
+                        };
+                    }
 
                     const renameBtn = card.querySelector('.rename-session-btn');
                     if (renameBtn) {
