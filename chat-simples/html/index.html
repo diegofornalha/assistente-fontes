@@ -25,25 +25,12 @@
 </head>
 <body>
     <div class="container">
-        <!-- Debug Visual Toggle (topo) -->
-        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
-
-        <!-- Debug Visual Panel (topo, recolhível) -->
-        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
-            <div class="debug-visual-header">
-                <h3>Debug Visual - Logs em Tempo Real</h3>
-                <a class="debug-header-link" href="index_projects.html" title="Ir para projetos">⟲ Projetos</a>
-            </div>
-            <div class="debug-visual-content" id="debug-visual-content">
-                <div class="debug-log"></div>
-            </div>
-        </div>
-
         <!-- Chat Container -->
         <div class="chat-container">
             <div class="chat-toolbar">
                 <div class="toolbar-left">
                     <a id="history-link" class="toolbar-link" href="index_projects.html" title="Ver histórico de sessões">📁 Histórico</a>
+                    <a href="index_projects.html" class="toolbar-link" title="Ir para projetos" style="text-decoration: none;">🗂️ Projetos</a>
                     <button id="new-chat-btn" class="toolbar-link" style="border: none; background: none; cursor: pointer; color: inherit; font: inherit;" title="Iniciar novo chat">✨ Novo Chat</button>
                 </div>
                 <div class="toolbar-right">
@@ -89,7 +76,6 @@
     </div>
 
     <script src="../js/debug.js"></script>
-    <script src="../js/debug-visual.js"></script>
     <script src="../js/templates.js"></script>
     <script src="../js/metrics.js"></script>
     <script src="../js/search.js"></script>

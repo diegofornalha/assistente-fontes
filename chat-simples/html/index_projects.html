@@ -11,15 +11,16 @@
 </head>
 <body>
     <div class="container">
-        <button id="debug-toggle-btn" class="debug-toggle-btn-top" title="Debug Visual (Ctrl+D)"><span class="debug-toggle-icon">☰</span></button>
-
-        <div id="debug-visual-panel" class="debug-visual-panel-top" style="display: none;">
-            <div class="debug-visual-header">
-                <h3>Debug Info</h3>
-                <a class="debug-header-link" href="index.html" title="Ir para o chat">⟲ Chat</a>
+        <!-- Toolbar com botão Chat sempre visível -->
+        <div class="chat-toolbar" style="margin-bottom: 1rem;">
+            <div class="toolbar-left">
+                <!-- Espaço vazio para manter layout -->
             </div>
-            <div class="debug-visual-content" id="debug-visual-content">
-                <div class="debug-log"></div>
+            <div class="toolbar-right">
+                <a href="index.html" class="toolbar-link" title="Ir para o chat" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;">
+                    <span>💬</span>
+                    <span>Chat</span>
+                </a>
             </div>
         </div>
 
@@ -28,7 +29,6 @@
         </div>
     </div>
 
-    <script src="../js/debug-visual.js"></script>
     <script>
         window.addEventListener('load', async () => {
             const container = document.getElementById('sessions-list');
@@ -65,8 +65,6 @@
             try {
                 const response = await fetch(`${window.location.origin}/sessions`);
                 const data = await response.json();
-
-                window.debugVisual?.log('success', data.count + ' sessões encontradas');
 
                 if (data.sessions.length === 0) {
                     container.innerHTML = '<p class="empty-state">Nenhuma sessão encontrada</p>';
@@ -153,7 +151,6 @@
                                 }
 
                                 const url = `${window.location.origin}/sessions/${encodeURIComponent(sessionId)}`;
-                                window.debugVisual?.log('info', `Deletando sessão: ${sessionId}`);
 
                                 const response = await fetch(url, { 
                                     method: 'DELETE',
@@ -171,7 +168,6 @@
 
                                 if (result.success) {
                                     const action = result.action || 'deleted';
-                                    window.debugVisual?.log('success', `✅ Sessão removida (${action}): ${session.file_name}`);
                                     
                                     // Adiciona animação de remoção
                                     card.style.transition = 'opacity 0.3s, transform 0.3s';
@@ -186,7 +182,6 @@
                                 }
                             } catch (error) {
                                 console.error('Erro ao deletar sessão:', error);
-                                window.debugVisual?.log('error', `❌ Erro ao deletar: ${error.message}`);
                                 alert(`Erro ao deletar sessão:\n${error.message}`);
                                 
                                 // Restaura o botão
@@ -216,7 +211,6 @@
 
             } catch (error) {
                 console.error('Erro:', error);
-                window.debugVisual?.log('error', 'Falha ao carregar: ' + error.message);
                 container.innerHTML = '<p class="empty-state error">❌ Erro ao carregar sessões</p>';
             }
         });

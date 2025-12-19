@@ -59,6 +59,9 @@
             <button id="delete-session-btn" class="send-button" style="margin-left: 0.5rem; background: #ef4444;" title="Deletar esta sessão">
                 <span class="button-icon">🗑️</span>
             </button>
+            <a href="index_projects.html" class="send-button" style="margin-left: 0.5rem; background: #3b82f6; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;" title="Voltar para projetos">
+                <span class="button-icon">📁</span>
+            </a>
         </div>
     </div>
 
@@ -822,6 +825,11 @@
 
         function buildSessionEntry(entry, index) {
             if (!entry) return null;
+
+            // Ocultar entradas do tipo "meta" (informações do sistema)
+            if (entry.type === 'meta') {
+                return null;
+            }
 
             if (entry.type === 'summary' || entry.summary) {
                 return createSummaryCard(entry, index);
