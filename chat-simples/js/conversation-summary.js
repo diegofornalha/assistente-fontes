@@ -19,6 +19,8 @@ class ConversationSummary {
         const closeBtn = document.getElementById('close-summary-modal');
         const regenerateBtn = document.getElementById('regenerate-summary-btn');
         const exportBtn = document.getElementById('export-summary-btn');
+        const generateAIBtn = document.getElementById('generate-ai-summary-btn');
+        const saveBtn = document.getElementById('save-conversation-btn');
         const modal = document.getElementById('conversation-summary-modal');
 
         if (summaryBtn) {
@@ -35,6 +37,14 @@ class ConversationSummary {
 
         if (exportBtn) {
             exportBtn.addEventListener('click', () => this.exportSummary());
+        }
+
+        if (generateAIBtn) {
+            generateAIBtn.addEventListener('click', () => this.generateAISummary());
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', () => this.saveConversation());
         }
 
         if (modal) {
@@ -98,7 +108,7 @@ class ConversationSummary {
         const userMessages = this.conversationHistory.filter(m => m.role === 'user').length;
         const aiMessages = this.conversationHistory.filter(m => m.role === 'assistant').length;
 
-        return `Esta conversa contém ${totalMessages} mensagens (${userMessages} perguntas suas e ${aiMessages} respostas da assistente). A conversa aborda conceitos do curso "Consultório High Ticket" com foco em estratégias para atrair pacientes high ticket e aumentar o faturamento de consultórios.`;
+        return `Esta conversa contém ${totalMessages} mensagens (${userMessages} perguntas suas e ${aiMessages} respostas da assistente). A conversa aborda questões sobre sistemas de CRM, Data Lake, arquitetura de dados e desenvolvimento de software.`;
     }
 
     extractTopics() {
@@ -106,7 +116,7 @@ class ConversationSummary {
         const keywords = {
             'Atração de Pacientes': ['atrair', 'captação', 'conquistar', 'marketing', 'pacientes'],
             'Precificação': ['preço', 'valor', 'cobrar', 'precificação', 'valoração'],
-            'Estruturação de Consultório': ['consultório', 'estrutura', 'organização', 'processo'],
+            'Arquitetura de Dados': ['data lake', 'bronze', 'silver', 'gold', 'arquitetura', 'schema'],
             'Comunicação com Pacientes': ['comunicação', 'conversa', 'relacionamento', 'vínculo'],
             'Estratégias de Vendas': ['venda', 'vendas', 'fechamento', 'proposta'],
             'Especialidades Médicas': ['dermatologista', 'pediatra', 'psicóloga', 'dentista', 'cardiologista'],
@@ -131,12 +141,12 @@ class ConversationSummary {
     extractModules() {
         const modules = new Set();
         const moduleNames = {
-            1: 'Fundamentos do Consultório High Ticket',
-            2: 'Estratégias de Atração de Pacientes',
-            3: 'Precificação e Monetização',
-            4: 'Estruturação de Processos',
-            5: 'Comunicação e Relacionamento',
-            6: 'Automação e Sistemas',
+            1: 'Data Lake - Bronze',
+            2: 'Data Lake - Silver',
+            3: 'Data Lake - Gold',
+            4: 'CRM Operacional',
+            5: 'RLS Policies',
+            6: 'Funções SQL',
             7: 'Especialidades Médicas'
         };
 
@@ -205,7 +215,7 @@ class ConversationSummary {
         if (insights.length === 0) {
             insights.push({
                 icon: '🌟',
-                text: 'Início de uma jornada de aprendizado sobre consultórios high ticket. Continue explorando os módulos para mais insights!'
+                text: 'Início de uma conversa sobre sistemas de CRM e Data Lake. Continue explorando os tópicos para mais insights!'
             });
         }
 
@@ -235,7 +245,7 @@ class ConversationSummary {
         if (uniqueModuleNumbers.size === 0) {
             suggestions.push({
                 icon: '🚀',
-                text: 'Comece explorando o Módulo 1: Fundamentos do Consultório High Ticket'
+                text: 'Comece explorando Data Lake - Bronze: estrutura básica de dados'
             });
             suggestions.push({
                 icon: '❓',
@@ -275,7 +285,7 @@ class ConversationSummary {
 
     getModuleName(moduleNumber) {
         const names = {
-            1: 'Fundamentos do Consultório High Ticket',
+            1: 'Data Lake - Bronze',
             2: 'Estratégias de Atração de Pacientes',
             3: 'Precificação e Monetização',
             4: 'Estruturação de Processos',
@@ -386,6 +396,161 @@ class ConversationSummary {
         }
     }
 
+    async generateAISummary() {
+        if (this.conversationHistory.length === 0) {
+            alert('Nenhuma conversa para resumir');
+            return;
+        }
+
+        const generateBtn = document.getElementById('generate-ai-summary-btn');
+        const statusDiv = document.getElementById('ai-summary-status');
+        const overview = document.getElementById('summary-overview');
+
+        // Mostrar loading
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<span class="spinner"></span> Gerando com IA...';
+
+        // Limpar overview e mostrar indicador de typing
+        if (overview) {
+            overview.innerHTML = `
+                <p><strong>🤖 Resumo Inteligente:</strong></p>
+                <div class="typing-summary">
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                    <span class="typing-dot"></span>
+                </div>
+            `;
+        }
+
+        try {
+            const response = await fetch('/api/conversation/summary/stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: this.conversationHistory
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullSummary = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6).trim();
+
+                        if (data === '[DONE]') {
+                            if (statusDiv) {
+                                statusDiv.innerHTML = '<span class="success-icon">✓</span> Resumo gerado com sucesso!';
+                                statusDiv.className = 'summary-status success';
+                            }
+                            break;
+                        }
+
+                        if (data.startsWith('[ERROR]')) {
+                            throw new Error(data.slice(7));
+                        }
+
+                        // Acumular o resumo
+                        fullSummary += data;
+
+                        // Atualizar o overview em tempo real
+                        if (overview) {
+                            const contentDiv = overview.querySelector('.typing-summary');
+                            if (contentDiv) {
+                                overview.innerHTML = `
+                                    <p><strong>🤖 Resumo Inteligente:</strong></p>
+                                    <p style="margin-top: 1rem; line-height: 1.6;">${fullSummary}</p>
+                                `;
+                            }
+                        }
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error('Erro ao gerar resumo com IA:', error);
+            if (overview) {
+                overview.innerHTML = '<p class="error-message">Erro ao gerar resumo com IA</p>';
+            }
+            if (statusDiv) {
+                statusDiv.innerHTML = `<span class="error-icon">✗</span> Erro: ${error.message}`;
+                statusDiv.className = 'summary-status error';
+            }
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = '<span class="sparkle">✨</span> Gerar Resumo com IA';
+        }
+    }
+
+    async saveConversation() {
+        if (this.conversationHistory.length === 0) {
+            alert('Nenhuma conversa para salvar');
+            return;
+        }
+
+        const saveBtn = document.getElementById('save-conversation-btn');
+        const statusDiv = document.getElementById('ai-summary-status');
+
+        // Mostrar loading
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+        try {
+            // Salvar cada mensagem no banco via WebSocket
+            if (window.claudeChatApp && window.claudeChatApp.ws) {
+                // Recriar a conversa via WebSocket para persistir no logs.db
+                for (const msg of this.conversationHistory) {
+                    if (msg.role === 'user') {
+                        // Enviar mensagem do usuário
+                        window.claudeChatApp.ws.send(JSON.stringify({
+                            message: msg.content,
+                            conversation_id: window.claudeChatApp.conversationId || 'summary_' + Date.now()
+                        }));
+
+                        // Aguardar um pouco para não sobrecarregar
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                }
+
+                if (statusDiv) {
+                    statusDiv.innerHTML = '<span class="success-icon">✓</span> Conversa salva com sucesso!';
+                    statusDiv.className = 'summary-status success';
+                }
+
+                // Mostrar notificação de sucesso
+                this.showToast('Conversa salva com sucesso no histórico!', 'success');
+            } else {
+                throw new Error('WebSocket não disponível');
+            }
+
+        } catch (error) {
+            console.error('Erro ao salvar conversa:', error);
+            if (statusDiv) {
+                statusDiv.innerHTML = `<span class="error-icon">✗</span> Erro: ${error.message}`;
+                statusDiv.className = 'summary-status error';
+            }
+            this.showToast('Erro ao salvar conversa', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '<span class="btn-icon">💾</span> Salvar Conversa';
+        }
+    }
+
     exportSummary() {
         if (!this.summary) {
             alert('Nenhum resumo para exportar');
@@ -393,7 +558,7 @@ class ConversationSummary {
         }
 
         const content = `
-RESUMO DA CONVERSA - Consultório High Ticket
+RESUMO DA CONVERSA - Sistema CRM/Data Lake
 =============================================
 
 📝 RESUMO GERAL

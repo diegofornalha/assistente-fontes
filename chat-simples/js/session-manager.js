@@ -130,11 +130,17 @@ class SessionManager {
                         ></textarea>
                     </div>
 
-                    <button id="generate-summary-btn" class="generate-summary-btn tooltip">
-                        <span class="sparkle">✨</span>
-                        Gerar Resumo com IA
-                        <span class="tooltiptext">Usa LLM para criar um resumo automático da conversa</span>
-                    </button>
+                    <div class="summary-actions-row" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <button id="generate-summary-btn" class="generate-summary-btn tooltip">
+                            <span class="sparkle">✨</span>
+                            Gerar Resumo com IA
+                            <span class="tooltiptext">Usa LLM para criar um resumo automático da conversa</span>
+                        </button>
+                        <button id="save-session-btn" class="save-summary-btn" style="background-color: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;">
+                            <span>💾</span>
+                            Salvar
+                        </button>
+                    </div>
 
                     <div id="summary-status" class="summary-status">
                         <span id="summary-status-text"></span>
@@ -142,7 +148,6 @@ class SessionManager {
                 </div>
 
                 <div class="modal-actions">
-                    <button id="save-session-btn">Salvar</button>
                     <button id="cancel-modal-btn">Cancelar</button>
                 </div>
             </div>

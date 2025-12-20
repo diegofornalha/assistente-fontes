@@ -73,7 +73,7 @@ class SessionViewer {
             const div = document.createElement('div');
             div.className = 'message assistant';
             const time = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
-            div.innerHTML = '<div class="message-header"><strong>🤖 Nanda</strong><span class="timestamp">' + time + '</span></div><div class="message-content"><p></p></div>';
+            div.innerHTML = '<div class="message-header"><strong>🤖 Assistente</strong><span class="timestamp">' + time + '</span></div><div class="message-content"><p></p></div>';
             this.messagesContainer.appendChild(div);
             p = div.querySelector('p');
         }

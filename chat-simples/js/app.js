@@ -761,7 +761,7 @@ class ClaudeChatApp {
         if (role === 'user') {
             title.textContent = '👤 Você';
         } else if (role === 'assistant') {
-            title.textContent = '🤖 Nanda';
+            title.textContent = '🤖 Assistente';
         } else {
             title.textContent = 'ℹ️ Sistema';
         }
@@ -1264,4 +1264,6 @@ class ClaudeChatApp {
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 Iniciando Claude Chat App...');
     window.chatApp = new ClaudeChatApp();
+    // Alias para compatibilidade
+    window.claudeChatApp = window.chatApp;
 });

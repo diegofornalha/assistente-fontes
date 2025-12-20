@@ -915,12 +915,12 @@ def generate_session_summary(session_id: str, request: Request):
     return JSONResponse({"success": True, "summary": summary})
 
 @app.put("/sessions/{session_id}/metadata")
-def save_session_metadata(session_id: str, request: Request):
+async def save_session_metadata(session_id: str, request: Request):
     """
     Salva metadados da sessão (título, resumo, tags).
     """
     try:
-        payload = request.json()
+        payload = await request.json()
         title = payload.get('title')
         summary = payload.get('summary')
         tags = payload.get('tags')
@@ -946,6 +946,86 @@ def get_session_metadata(session_id: str):
         return JSONResponse({"success": False, "error": "Metadados não encontrados"}, status_code=404)
 
     return JSONResponse({"success": True, "metadata": metadata})
+
+@app.post("/api/conversation/summary")
+async def generate_current_conversation_summary(request: Request):
+    """
+    Gera resumo da conversa atual usando LLM (Minimax) com streaming.
+    Recebe mensagens via POST e retorna resumo detalhado em tempo real.
+    """
+    from gpt_utils import generate_conversation_summary
+
+    try:
+        payload = await request.json()
+        messages = payload.get('messages', [])
+
+        if not messages:
+            return JSONResponse({
+                "success": False,
+                "error": "Nenhuma mensagem fornecida"
+            }, status_code=400)
+
+        # Gerar resumo usando LLM
+        summary = generate_conversation_summary(messages, max_length=800)
+
+        return JSONResponse({
+            "success": True,
+            "summary": summary,
+            "message_count": len(messages)
+        })
+
+    except Exception as e:
+        print(f"❌ Erro ao gerar resumo: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+@app.post("/api/conversation/summary/stream")
+async def generate_current_conversation_summary_stream(request: Request):
+    """
+    Gera resumo da conversa atual usando LLM (Minimax) com streaming SSE.
+    Similar ao chat, envia chunks do resumo conforme são gerados.
+    """
+    from gpt_utils import generate_conversation_summary_stream
+
+    try:
+        payload = await request.json()
+        messages = payload.get('messages', [])
+
+        if not messages:
+            return JSONResponse({
+                "success": False,
+                "error": "Nenhuma mensagem fornecida"
+            }, status_code=400)
+
+        async def stream_generator():
+            try:
+                full_summary = ""
+                async for chunk in generate_conversation_summary_stream(messages, max_length=800):
+                    full_summary += chunk
+                    yield f"data: {chunk}\n\n"
+
+                yield f"data: [DONE]\n\n"
+            except Exception as e:
+                yield f"data: [ERROR] {str(e)}\n\n"
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+
+    except Exception as e:
+        print(f"❌ Erro ao gerar resumo stream: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
 
 @app.delete("/sessions/{session_id}/messages")
 async def delete_session_message(session_id: str, request: Request):

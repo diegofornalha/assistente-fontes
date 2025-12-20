@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Visão Geral do Projeto
 
-Este é um chatbot educacional em português brasileiro chamado "Assistente Professor" para o curso "Consultório High Ticket". A aplicação funciona como uma professora virtual (Nanda Mac.ia) que ensina e tira dúvidas de profissionais da saúde sobre como atrair pacientes high ticket e aumentar o faturamento de seus consultórios.
+Este é um sistema de chatbot em português brasileiro chamado "Assistente de Dados" para gestão de Data Lake e CRM. A aplicação funciona como um assistente virtual que ajuda com consultas sobre estrutura de dados, pipelines, métricas de qualidade, compliance LGPD e análise de leads em um sistema de dados分层 (Medallion Architecture: Bronze, Silver, Gold).
 
 ### Stack Tecnológico
 - **Backend**: FastAPI (Python)
@@ -65,7 +65,7 @@ MINIMAX_API_KEY=<sua-chave-minimax>  # Para chat/completions (obrigatório)
    - Quick replies gerados dinamicamente
 
 3. **Processamento de Perguntas** (`POST /ask`)
-   - Normalização de comandos de módulo/aula (regex)
+   - Normalização de comandos técnicos (regex)
    - Recuperação de contexto via `search_engine.py`
    - Inferência de tipo de prompt via `prompt_router.py`
    - Geração de resposta via `gpt_utils.py`
@@ -80,9 +80,8 @@ MINIMAX_API_KEY=<sua-chave-minimax>  # Para chat/completions (obrigatório)
 ### Módulos Principais
 
 **gpt_utils.py**: Lógica central de conversação
-- Gerencia sistema de progressão por módulos/aulas (7 módulos)
-- Detecta cenários: dúvida pontual, exemplo prático, navegação, curso completo
-- Mantém estado de progresso (módulo, aula, etapa 1-3, aguardando_duvida)
+- Detecta cenários: dúvida sobre Data Lake, consulta SQL, explicação técnica, navegação
+- Processa consultas sobre arquitetura Bronze/Silver/Gold
 - Gera quick replies contextuais
 - Chamadas à API Minimax (abab6.5s-chat, temperature 0.4, max_tokens 900)
 
@@ -101,39 +100,15 @@ MINIMAX_API_KEY=<sua-chave-minimax>  # Para chat/completions (obrigatório)
 - Redireciona para /login se inválido
 
 **db_logs.py**: Persistência de logs
-- Registra: usuario, pergunta, resposta, contexto, tipo_prompt, modulo, aula, timestamp
+- Registra: usuario, pergunta, resposta, contexto, tipo_prompt, timestamp
 - SQLite (logs.db)
-
-**healthplan_log.py**: Log específico de Health Plan
-- Rastreamento separado de perguntas sobre planos de tratamento
-
-### Sistema de Progressão de Conteúdo
-
-O curso tem **7 módulos** com aulas numeradas (ex: 1.1, 2.3, 7.9):
-- Módulo 1: 5 aulas (1.1 a 1.5)
-- Módulo 2: 9 aulas (2.1 a 2.9)
-- Módulo 3: 5 aulas
-- Módulo 4: 5 aulas
-- Módulo 5: 5 aulas
-- Módulo 6: 5 aulas
-- Módulo 7: 9 aulas (especialidades)
-
-**Lógica de Progressão**:
-- Cada aula tem 3 etapas (introdução, prática, conclusão)
-- Sistema de navegação: próxima/anterior aula, repetir, voltar, escolher módulo/aula
-- Respostas "sim"/"não" controlam fluxo (avançar etapa vs pular aula)
-- Normalização automática de comandos: "módulo 07" → "módulo 7", "aula 7.2.2" → "aula 7.2.2"
 
 ### Detecção Especial de Cenários
 
-**Anti-loop de lista de módulos** (main.py:196-207):
-- Se usuário pede módulo/aula específica mas GPT retorna lista geral, faz retry com reforço
-- Usa heurística: verifica se resposta contém "composto por 7 módulos"
-
-**Dúvidas pontuais** (gpt_utils.py:59-104):
-- Detecta especialidades médicas (dermatologista, pediatra, psicóloga, etc.)
-- Detecta termos de ação (atrair, captar, faturar, consultório cheio, etc.)
-- Retorna resposta personalizada sem entrar na progressão de aulas
+**Consultas sobre Data Lake** (gpt_utils.py:59-104):
+- Detecta termos técnicos (Bronze, Silver, Gold, pipeline, ETL, etc.)
+- Detecta consultas SQL e estrutura de dados
+- Retorna respostas técnicas baseadas no contexto do transcricoes.txt
 
 ## Convenções de Código
 
@@ -142,8 +117,8 @@ O curso tem **7 módulos** com aulas numeradas (ex: 1.1, 2.3, 7.9):
 - Preserva campos: user, ai, quick_replies, chip, progresso
 
 ### Prompt Engineering
-- Sempre cita módulo/aula com nome exato (não adaptar/resumir)
-- Inclui `BLOCO_MODULOS` (estrutura completa do curso) em todo prompt
+- Sempre cita camadas/tabelas com nome exato (não adaptar/resumir)
+- Inclui contexto do Data Lake (Bronze, Silver, Gold) em todo prompt
 - Instrução: "Responda SEMPRE em português do Brasil"
 - Temperature: 0.4 (balance entre criatividade e consistência)
 
