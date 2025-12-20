@@ -25,7 +25,7 @@
 Este guia explica como usar o **systemd** para manter suas aplicações Python/FastAPI sempre rodando, mesmo após reiniciar o servidor ou se o processo cair. Inclui também troubleshooting específico para aplicações Python/FastAPI, boas práticas de segurança e gerenciamento de virtual environments.
 
 **Serviços configurados neste projeto:**
-- `assistente-dados`: Backend FastAPI (porta 8182)
+- `assistente-dados`: Backend FastAPI (porta 8183)
 - `assistente-fontes`: Backend FastAPI (porta 8181)
 
 ---
@@ -82,7 +82,7 @@ User=dados                                      # Qual usuário Linux vai execut
 WorkingDirectory=/home/dados/assistente-dados/backend-dados  # Pasta onde o comando roda
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"     # Variável de ambiente PATH
 EnvironmentFile=/home/dados/assistente-dados/.env             # Arquivo com variáveis secretas
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183
 #         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #         Este é o comando que será executado para iniciar o serviço
 Restart=always                                  # SEMPRE reiniciar se cair
@@ -139,7 +139,7 @@ User=dados
 WorkingDirectory=/home/dados/assistente-dados/backend-dados
 Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 EnvironmentFile=/home/dados/assistente-dados/.env
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183
 Restart=always
 RestartSec=3
 
@@ -290,7 +290,7 @@ sudo systemctl status assistente-dados -l --no-pager
 ps aux | grep uvicorn
 
 # Verificar porta em uso
-sudo ss -tlnp | grep 8182
+sudo ss -tlnp | grep 8183
 ```
 
 #### 2. Debugging de Aplicações Python/FastAPI
@@ -319,16 +319,16 @@ source /home/dados/assistente-dados/.venv/bin/activate
 python -c "import main; print('Módulo carregado!')"
 
 # Execute manualmente (útil para ver erros em tempo real)
-python -m uvicorn main:app --host 0.0.0.0 --port 8182
+python -m uvicorn main:app --host 0.0.0.0 --port 8183
 ```
 
 **Verificar se a aplicação responde:**
 ```bash
 # Teste básico de saúde
-curl -f http://localhost:8182/health 2>/dev/null || echo "Falha no health check"
+curl -f http://localhost:8183/health 2>/dev/null || echo "Falha no health check"
 
 # Ver se o endpoint principal responde
-curl -s http://localhost:8182/sessions | head -20
+curl -s http://localhost:8183/sessions | head -20
 ```
 
 #### 3. Problemas Comuns e Soluções
@@ -336,15 +336,15 @@ curl -s http://localhost:8182/sessions | head -20
 **Problema: "Address already in use"**
 ```bash
 # Encontrar o processo que usa a porta
-sudo lsof -i :8182
+sudo lsof -i :8183
 # ou
-sudo fuser -v 8182/tcp
+sudo fuser -v 8183/tcp
 
 # Matar o processo
 sudo kill -9 PID
 
 # Verificar se realmente morreu
-sudo ss -tlnp | grep 8182
+sudo ss -tlnp | grep 8183
 ```
 
 **Problema: "ModuleNotFoundError"**
@@ -385,7 +385,7 @@ sudo journalctl -u assistente-dados --no-pager -n 100
 
 # Adicionar mais verbosidade ao serviço
 # Edite o arquivo .service e adicione:
-# ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --log-level debug
+# ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183 --log-level debug
 ```
 
 #### 4. Logs Estruturados para Debug
@@ -470,14 +470,14 @@ RestartInterval=30s         # Intervalo entre tentativas
 #### Configurar múltiplas portas:
 ```ini
 [Service]
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --workers 4
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183 --workers 4
 ```
 
 #### Configurar SSL/HTTPS (com nginx como proxy):
 ```ini
 [Service]
 # O uvicorn fica apenas interno, nginx faz o proxy reverso
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8182
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8183
 ```
 
 ### 📊 Logging Avançado
@@ -556,7 +556,7 @@ Environment="PYTHONPATH=/home/dados/assistente-dados/backend-dados:/home/dados/a
 #### Seleção de interpretador Python:
 ```ini
 [Service]
-ExecStart=/usr/bin/python3.11 -m uvicorn main:app --host 0.0.0.0 --port 8182
+ExecStart=/usr/bin/python3.11 -m uvicorn main:app --host 0.0.0.0 --port 8183
 ```
 
 #### Configurações de garbage collection:
@@ -712,7 +712,7 @@ NotifyAccess=all
 # /home/dados/scripts/health-check.sh
 
 SERVICE="assistente-dados"
-PORT=8182
+PORT=8183
 
 # Verificar se o serviço está ativo
 if ! systemctl is-active --quiet $SERVICE; then
@@ -856,7 +856,7 @@ Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 EnvironmentFile=/home/dados/assistente-dados/.env
 
 # Comando
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183
 
 # Reinício
 Restart=always
@@ -993,7 +993,7 @@ sudo systemctl start assistente-dados
 #### 7. Verificar:
 ```bash
 sudo systemctl status assistente-dados
-curl http://localhost:8182/sessions
+curl http://localhost:8183/sessions
 sudo journalctl -u assistente-dados -n 20
 ```
 
@@ -1002,7 +1002,7 @@ sudo journalctl -u assistente-dados -n 20
 #### Blue-Green Deployment:
 ```bash
 # Preparar nova versão em paralelo
-# Serviço rodando na porta 8182
+# Serviço rodando na porta 8183
 
 # 1. Rodar nova versão na 8183
 cd /home/dados/assistente-dados/backend-dados
@@ -1015,7 +1015,7 @@ curl http://localhost:8183/health
 # 3. Parar serviço antigo
 sudo systemctl stop assistente-dados
 
-# 4. Iniciar novo na porta 8182
+# 4. Iniciar novo na porta 8183
 # (editar .service para porta 8183, reload, start)
 # OU configurar nginx para load balance
 ```
@@ -1024,7 +1024,7 @@ sudo systemctl stop assistente-dados
 ```bash
 # Para múltiplas instâncias
 # Usar --workers no uvicorn
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182 --workers 4
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183 --workers 4
 ```
 
 ### 📦 Rollback (Voltar Versão Anterior)
@@ -1094,7 +1094,7 @@ sudo systemctl start $SERVICE
 sleep 3
 if systemctl is-active --quiet $SERVICE; then
     echo "✅ Serviço atualizado com sucesso!"
-    curl -s http://localhost:8182/sessions > /dev/null && echo "✅ API respondendo!"
+    curl -s http://localhost:8183/sessions > /dev/null && echo "✅ API respondendo!"
 else
     echo "❌ Falha ao atualizar!"
     echo "Restaurando backup..."
@@ -1130,7 +1130,7 @@ Environment="PATH=/home/dados/assistente-dados/.venv/bin"
 EnvironmentFile=/home/dados/assistente-dados/.env
 
 # Comando
-ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+ExecStart=/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183
 
 # Reinício
 Restart=always
@@ -1208,7 +1208,7 @@ TIMEOUT=30
 # /home/dados/scripts/health-check.sh
 
 SERVICE="assistente-dados"
-PORT=8182
+PORT=8183
 LOG_FILE="/var/log/health-check.log"
 
 # Função para log
@@ -1489,8 +1489,8 @@ sudo journalctl -u assistente-dados --since "1 day ago" > /tmp/logs.txt
 ps aux | grep uvicorn
 
 # Verificar porta em uso
-sudo ss -tlnp | grep 8182
-sudo lsof -i :8182
+sudo ss -tlnp | grep 8183
+sudo lsof -i :8183
 
 # Verificar dependências Python
 /home/dados/assistente-dados/.venv/bin/pip list
@@ -1500,7 +1500,7 @@ cd /home/dados/assistente-dados/backend-dados
 /home/dados/assistente-dados/.venv/bin/python -c "import main; print('OK')"
 
 # Testar execução manual
-/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8182
+/home/dados/assistente-dados/.venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8183
 ```
 
 ### 📂 Locais Importantes
@@ -1542,7 +1542,7 @@ systemctl show assistente-dados --property=MainPID
 ps -p $(systemctl show -p MainPID --value assistente-dados) -o pid,%cpu,%mem,cmd
 
 # Health check simples
-curl -f http://localhost:8182/health || echo "Falha no health check"
+curl -f http://localhost:8183/health || echo "Falha no health check"
 
 # Ver logs em tempo real
 sudo tail -f /var/log/assistente-dados.log
@@ -1563,7 +1563,7 @@ sudo kill -9 $(pgrep -f assistente-dados)
 sudo systemctl start assistente-dados
 
 # Verificar se há processos órfãos
-ps aux | grep python | grep 8182
+ps aux | grep python | grep 8183
 
 # Forçar reload do systemd
 sudo systemctl daemon-reexec
@@ -1606,7 +1606,7 @@ O **systemd** é uma ferramenta poderosa e essencial para gerenciar aplicações
 
 **📚 Documentação criada em 18/12/2025**
 **🖥️ Ambiente: nandamac (Linux)**
-**🔧 Serviços: assistente-fontes (8181), assistente-dados (8182)**
+**🔧 Serviços: assistente-fontes (8181), assistente-dados (8183)**
 **🐍 Python: FastAPI + Uvicorn + Virtual Environments**
 **🔐 Segurança: Usuários não-root + Permissões mínimas + Secrets seguros**
 
